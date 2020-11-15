@@ -24,6 +24,7 @@ import (
 // and dataAndWhere[1:] is treated as where condition fields.
 // Also see Model.Data and Model.Where functions.
 func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err error) {
+	fmt.Println("进入这里了:update")
 	if len(dataAndWhere) > 0 {
 		if len(dataAndWhere) > 2 {
 			return m.Data(dataAndWhere[0]).Where(dataAndWhere[1], dataAndWhere[2:]...).Update()
@@ -48,6 +49,7 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 		fieldNameDelete                               = m.getSoftFieldNameDeleted()
 		conditionWhere, conditionExtra, conditionArgs = m.formatCondition(false, false)
 	)
+	fmt.Println("进入这里了:a2==>"+fieldNameUpdate)
 	// Automatically update the record updating time.
 	if !m.unscoped && fieldNameUpdate != "" {
 		var (
@@ -58,22 +60,26 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 			refValue = refValue.Elem()
 			refKind = refValue.Kind()
 		}
+		fmt.Println("进入这里了:aa3")
 		switch refKind {
 		case reflect.Map, reflect.Struct:
+			fmt.Println("进入这里了:structs")
 			dataMap := ConvertDataForTableRecord(m.data)
 			gutil.MapDelete(dataMap, fieldNameCreate, fieldNameUpdate, fieldNameDelete)
 			if fieldNameUpdate != "" {
-				dataMap[fieldNameUpdate] = gtime.Now().String()
+				dataMap[fieldNameUpdate] = defaultOrValueTime(dataMap[fieldNameUpdate])
 			}
 			updateData = dataMap
 		default:
 			updates := gconv.String(m.data)
+			fmt.Println("我是updatedefault")
 			if fieldNameUpdate != "" && !gstr.Contains(updates, fieldNameUpdate) {
 				updates += fmt.Sprintf(`,%s='%s'`, fieldNameUpdate, gtime.Now().String())
 			}
 			updateData = updates
 		}
 	}
+
 	newData, err := m.filterDataForInsertOrUpdate(updateData)
 	if err != nil {
 		return nil, err
@@ -82,6 +88,7 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 	if !gstr.ContainsI(conditionStr, " WHERE ") {
 		return nil, gerror.New("there should be WHERE condition statement for UPDATE operation")
 	}
+	fmt.Println("====>>>>",newData)
 	return m.db.DoUpdate(
 		m.getLink(true),
 		m.tables,

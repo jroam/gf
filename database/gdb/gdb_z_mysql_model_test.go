@@ -99,6 +99,32 @@ func Test_Model_Insert(t *testing.T) {
 	})
 }
 
+func Test_Model_defaultOrValueTime(t *testing.T) {
+	//table := createInitTable()
+	table:="user_1605410946852960100"
+	//defer dropTable(table)
+	type User struct{
+		Id int `json:"id"`
+		Nickname string `json:"nickname"`
+		CreateTime time.Time `json:"create_time"`
+		UpdateAt time.Time `json:"update_time"`
+	}
+	gtest.C(t, func(t *gtest.T) {
+		user:=&User{}
+		//user.UpdateAt=time.Now().UTC()
+		user.Nickname="yy2"
+		user.UpdateAt=time.Now().UTC()
+		db.SetDebug(true)
+		_, err := db.Table(table).Data(user).Where("id",10).Update()
+		if err!=nil{
+			g.Dump(err.Error())
+		}
+		//t.Assert(err, nil)
+		g.Dump("done")
+
+	})
+}
+
 // Fix issue: https://github.com/gogf/gf/issues/819
 func Test_Model_Insert_WithStructAndSliceAttribute(t *testing.T) {
 	table := createTable()

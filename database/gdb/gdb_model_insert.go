@@ -9,7 +9,6 @@ package gdb
 import (
 	"database/sql"
 	"errors"
-	"github.com/gogf/gf/os/gtime"
 	"github.com/gogf/gf/text/gstr"
 	"github.com/gogf/gf/util/gconv"
 	"github.com/gogf/gf/util/gutil"
@@ -148,7 +147,6 @@ func (m *Model) doInsertWithOption(option int, data ...interface{}) (result sql.
 		return nil, errors.New("inserting into table with empty data")
 	}
 	var (
-		nowString       = gtime.Now().String()
 		fieldNameCreate = m.getSoftFieldNameCreated()
 		fieldNameUpdate = m.getSoftFieldNameUpdated()
 		fieldNameDelete = m.getSoftFieldNameDeleted()
@@ -164,10 +162,10 @@ func (m *Model) doInsertWithOption(option int, data ...interface{}) (result sql.
 			for k, v := range list {
 				gutil.MapDelete(v, fieldNameCreate, fieldNameUpdate, fieldNameDelete)
 				if fieldNameCreate != "" {
-					v[fieldNameCreate] = nowString
+					v[fieldNameCreate] = defaultOrValueTime(v[fieldNameCreate])
 				}
 				if fieldNameUpdate != "" {
-					v[fieldNameUpdate] = nowString
+					v[fieldNameUpdate] = defaultOrValueTime(v[fieldNameUpdate])
 				}
 				list[k] = v
 			}
@@ -190,10 +188,10 @@ func (m *Model) doInsertWithOption(option int, data ...interface{}) (result sql.
 		if !m.unscoped && (fieldNameCreate != "" || fieldNameUpdate != "") {
 			gutil.MapDelete(data, fieldNameCreate, fieldNameUpdate, fieldNameDelete)
 			if fieldNameCreate != "" {
-				data[fieldNameCreate] = nowString
+				data[fieldNameCreate] =  defaultOrValueTime(data[fieldNameCreate])
 			}
 			if fieldNameUpdate != "" {
-				data[fieldNameUpdate] = nowString
+				data[fieldNameUpdate] = defaultOrValueTime(data[fieldNameUpdate])
 			}
 		}
 		newData, err := m.filterDataForInsertOrUpdate(data)

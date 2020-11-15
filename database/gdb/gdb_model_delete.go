@@ -10,7 +10,6 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/gogf/gf/errors/gerror"
-	"github.com/gogf/gf/os/gtime"
 	"github.com/gogf/gf/text/gstr"
 )
 
@@ -37,7 +36,7 @@ func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
 			m.tables,
 			fmt.Sprintf(`%s=?`, m.db.QuoteString(fieldNameDelete)),
 			conditionWhere+conditionExtra,
-			append([]interface{}{gtime.Now().String()}, conditionArgs...),
+			append([]interface{}{defaultOrValueTime("")}, conditionArgs...),
 		)
 	}
 	conditionStr := conditionWhere + conditionExtra

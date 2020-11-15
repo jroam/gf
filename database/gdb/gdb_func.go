@@ -252,8 +252,7 @@ func doHandleTableName(table, prefix, charLeft, charRight string) string {
 		array1 = gstr.SplitAndTrim(table, ",")
 	)
 	for k1, v1 := range array1 {
-		array2 := gstr.SplitAndTrim(v1, " ")
-		// Trim the security chars.
+		array2 := gstr.SplitAndTrim(v1, " ")		// Trim the security chars.
 		array2[0] = gstr.Trim(array2[0], chars)
 		// Check whether it has database name.
 		array3 := gstr.Split(gstr.Trim(array2[0]), ".")
@@ -740,4 +739,12 @@ func mapToStruct(data map[string]interface{}, pointer interface{}) error {
 		mapping[strings.Split(tag, ",")[0]] = attr
 	}
 	return gconv.Struct(data, pointer, mapping)
+}
+
+func defaultOrValueTime(timeEntity interface{}) string{
+	timeStr:=gconv.String(timeEntity)
+	if timeStr!=""{
+		return timeStr
+	}
+	return gtime.Now().String()
 }
