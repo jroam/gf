@@ -96,18 +96,27 @@ func (m *Model) doMappingAndFilterForInsertOrUpdateDataMap(data Map, allowOmitEm
 			case time.Time:
 				if r.IsZero() {
 					continue
+				}else{
+					//v=gtime.NewFromStr(v.(string)).String()
 				}
 			case *time.Time:
 				if r.IsZero() {
 					continue
+				}else{
+					v=v.(*time.Time).Format("2006-05-04 15:02:01")
 				}
 			case gtime.Time:
 				if r.IsZero() {
 					continue
+				}else{
+					v=gconv.String(v)
 				}
+
 			case *gtime.Time:
 				if r.IsZero() {
 					continue
+				}else{
+					v=gconv.String(v)
 				}
 			}
 			tempMap[k] = v

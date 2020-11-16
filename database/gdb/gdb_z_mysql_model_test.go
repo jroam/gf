@@ -107,15 +107,18 @@ func Test_Model_defaultOrValueTime(t *testing.T) {
 		Id int `json:"id"`
 		Nickname string `json:"nickname"`
 		CreateTime time.Time `json:"create_time"`
-		UpdateAt time.Time `json:"update_time"`
+		UpdateAt *gtime.Time `json:"update_time"`
 	}
 	gtest.C(t, func(t *gtest.T) {
+		t1:="2020-11-12 20:11:14"
 		user:=&User{}
 		//user.UpdateAt=time.Now().UTC()
 		user.Nickname="yy2"
-		user.UpdateAt=time.Now().UTC()
+		user.UpdateAt=gtime.NewFromStr(t1).UTC()
+		user.CreateTime=gtime.NewFromStr(t1).Time.UTC()
+		//fmt.Println(user.)
 		db.SetDebug(true)
-		_, err := db.Table(table).Data(user).Where("id",10).Update()
+		_, err := db.Table(table).Data(user).OmitEmpty().Where("id",10).Update()
 		if err!=nil{
 			g.Dump(err.Error())
 		}
@@ -124,6 +127,22 @@ func Test_Model_defaultOrValueTime(t *testing.T) {
 
 	})
 }
+
+
+func Test_Model_defaultOrValueTime2(t *testing.T) {
+	//table:="user_1605410946852960100"
+	db.SetDebug(true)
+	rs,err:=db.Exec("UPDATE `user_1605410946852960100` SET `update_time`='2020-11-12 12:11:13',`nickname`='yy2' WHERE `id`=10")
+	if err!=nil{
+		g.Dump(err.Error())
+	}else{
+		g.Dump(rs)
+	}
+
+}
+
+
+
 
 // Fix issue: https://github.com/gogf/gf/issues/819
 func Test_Model_Insert_WithStructAndSliceAttribute(t *testing.T) {

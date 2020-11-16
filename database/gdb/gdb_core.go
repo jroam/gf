@@ -90,6 +90,7 @@ func (c *Core) Exec(sql string, args ...interface{}) (result sql.Result, err err
 func (c *Core) DoExec(link Link, sql string, args ...interface{}) (result sql.Result, err error) {
 	sql, args = formatSql(sql, args)
 	sql, args = c.DB.HandleSqlBeforeCommit(link, sql, args)
+	fmt.Println("sql====>",sql,args)
 	if c.DB.GetDebug() {
 		mTime1 := gtime.TimestampMilli()
 		if !c.DB.GetDryRun() {
@@ -107,6 +108,7 @@ func (c *Core) DoExec(link Link, sql string, args ...interface{}) (result sql.Re
 			End:    mTime2,
 			Group:  c.DB.GetGroup(),
 		}
+
 		c.writeSqlToLogger(s)
 	} else {
 		if !c.DB.GetDryRun() {

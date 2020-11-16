@@ -24,7 +24,7 @@ import (
 // and dataAndWhere[1:] is treated as where condition fields.
 // Also see Model.Data and Model.Where functions.
 func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err error) {
-	fmt.Println("进入这里了:update")
+
 	if len(dataAndWhere) > 0 {
 		if len(dataAndWhere) > 2 {
 			return m.Data(dataAndWhere[0]).Where(dataAndWhere[1], dataAndWhere[2:]...).Update()
