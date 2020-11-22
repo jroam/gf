@@ -50,6 +50,11 @@ func doStruct(params interface{}, pointer interface{}, mapping ...map[string]str
 	if pointer == nil {
 		return gerror.New("object pointer cannot be nil")
 	}
+
+	if doStructByDirectReflectSet(params, pointer) {
+		return nil
+	}
+
 	defer func() {
 		// Catch the panic, especially the reflect operation panics.
 		if e := recover(); e != nil {
@@ -143,18 +148,6 @@ func doStruct(params interface{}, pointer interface{}, mapping ...map[string]str
 	// doneMap is used to check repeated converting, its key is the real attribute name
 	// of the struct.
 	doneMap := make(map[string]struct{})
-	// It first checks the passed mapping rules.
-	if len(mapping) > 0 && len(mapping[0]) > 0 {
-		for mapK, mapV := range mapping[0] {
-			// mapV is the the attribute name of the struct.
-			if paramV, ok := paramsMap[mapK]; ok {
-				doneMap[mapV] = struct{}{}
-				if err := bindVarToStructAttr(elem, mapV, paramV, mapping...); err != nil {
-					return err
-				}
-			}
-		}
-	}
 
 	// The key of the attrMap is the attribute name of the struct,
 	// and the value is its replaced name for later comparison to improve performance.
@@ -171,7 +164,7 @@ func doStruct(params interface{}, pointer interface{}, mapping ...map[string]str
 		if !utils.IsLetterUpper(elemFieldType.Name[0]) {
 			continue
 		}
-		// Maybe it's struct/*struct.
+		// Maybe it's struct/*struct embedded.
 		if elemFieldType.Anonymous {
 			elemFieldValue = elem.Field(i)
 			// Ignore the interface attribute if it's nil.
@@ -210,35 +203,43 @@ func doStruct(params interface{}, pointer interface{}, mapping ...map[string]str
 	)
 	for mapK, mapV := range paramsMap {
 		attrName = ""
-		checkName = utils.RemoveSymbols(mapK)
-		// Loop to find the matched attribute name with or without
-		// string cases and chars like '-'/'_'/'.'/' '.
-
-		// Matching the parameters to struct tag names.
-		// The <tagV> is the attribute name of the struct.
-		for attrKey, cmpKey := range tagMap {
-			if strings.EqualFold(checkName, cmpKey) {
-				attrName = attrKey
-				break
+		// It firstly checks the passed mapping rules.
+		if len(mapping) > 0 && len(mapping[0]) > 0 {
+			if passedAttrKey, ok := mapping[0][mapK]; ok {
+				attrName = passedAttrKey
 			}
 		}
-
-		// Matching the parameters to struct attributes.
+		// It secondly checks the predefined tags and matching rules.
 		if attrName == "" {
-			for attrKey, cmpKey := range attrMap {
-				// Eg:
-				// UserName  eq user_name
-				// User-Name eq username
-				// username  eq userName
-				// etc.
+			checkName = utils.RemoveSymbols(mapK)
+			// Loop to find the matched attribute name with or without
+			// string cases and chars like '-'/'_'/'.'/' '.
+
+			// Matching the parameters to struct tag names.
+			// The <tagV> is the attribute name of the struct.
+			for attrKey, cmpKey := range tagMap {
 				if strings.EqualFold(checkName, cmpKey) {
 					attrName = attrKey
 					break
 				}
 			}
+			// Matching the parameters to struct attributes.
+			if attrName == "" {
+				for attrKey, cmpKey := range attrMap {
+					// Eg:
+					// UserName  eq user_name
+					// User-Name eq username
+					// username  eq userName
+					// etc.
+					if strings.EqualFold(checkName, cmpKey) {
+						attrName = attrKey
+						break
+					}
+				}
+			}
 		}
 
-		// No matching, give up this attribute converting.
+		// No matching, it gives up this attribute converting.
 		if attrName == "" {
 			continue
 		}
@@ -253,6 +254,20 @@ func doStruct(params interface{}, pointer interface{}, mapping ...map[string]str
 		}
 	}
 	return nil
+}
+
+// doStructByDirectReflectSet do the converting directly using reflect Set.
+// It returns true if success, or else false.
+func doStructByDirectReflectSet(params interface{}, pointer interface{}) (ok bool) {
+	v1 := reflect.ValueOf(pointer)
+	v2 := reflect.ValueOf(params)
+	if v1.Kind() == reflect.Ptr {
+		if elem := v1.Elem(); elem.IsValid() && elem.Type() == v2.Type() {
+			elem.Set(v2)
+			ok = true
+		}
+	}
+	return ok
 }
 
 // bindVarToStructAttr sets value to struct object attribute by name.
