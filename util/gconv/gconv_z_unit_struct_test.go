@@ -1003,3 +1003,57 @@ func Test_Struct_AttrStructHasTheSameTag(t *testing.T) {
 		t.Assert(order.Product.UpdatedAtFormat, "")
 	})
 }
+
+func Test_Struct_DirectReflectSet(t *testing.T) {
+	type A struct {
+		Id   int
+		Name string
+	}
+
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			a = &A{
+				Id:   1,
+				Name: "john",
+			}
+			b *A
+		)
+		err := gconv.Struct(a, &b)
+		t.Assert(err, nil)
+		t.AssertEQ(a, b)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			a = A{
+				Id:   1,
+				Name: "john",
+			}
+			b A
+		)
+		err := gconv.Struct(a, &b)
+		t.Assert(err, nil)
+		t.AssertEQ(a, b)
+	})
+}
+
+func Test_Struct_NilEmbeddedStructAttribute(t *testing.T) {
+	type A struct {
+		Name string
+	}
+	type B struct {
+		*A
+		Id int
+	}
+
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			b *B
+		)
+		err := gconv.Struct(g.Map{
+			"id":   1,
+			"name": nil,
+		}, &b)
+		t.Assert(err, nil)
+		g.Dump(b)
+	})
+}
