@@ -741,6 +741,7 @@ func mapToStruct(data map[string]interface{}, pointer interface{}) error {
 	return gconv.Struct(data, pointer, mapping)
 }
 
+// Returns the value when there is a value, and the now time when there is no value
 func defaultOrValueTime(timeEntity interface{}) string{
 	timeStr:=gconv.String(timeEntity)
 	if timeStr!=""{

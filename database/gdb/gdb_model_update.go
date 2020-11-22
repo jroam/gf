@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gogf/gf/errors/gerror"
-	"github.com/gogf/gf/os/gtime"
 	"github.com/gogf/gf/text/gstr"
 	"github.com/gogf/gf/util/gconv"
 	"github.com/gogf/gf/util/gutil"
@@ -49,7 +48,6 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 		fieldNameDelete                               = m.getSoftFieldNameDeleted()
 		conditionWhere, conditionExtra, conditionArgs = m.formatCondition(false, false)
 	)
-	fmt.Println("进入这里了:a2==>"+fieldNameUpdate)
 	// Automatically update the record updating time.
 	if !m.unscoped && fieldNameUpdate != "" {
 		var (
@@ -60,10 +58,8 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 			refValue = refValue.Elem()
 			refKind = refValue.Kind()
 		}
-		fmt.Println("进入这里了:aa3")
 		switch refKind {
 		case reflect.Map, reflect.Struct:
-			fmt.Println("进入这里了:structs")
 			dataMap := ConvertDataForTableRecord(m.data)
 			gutil.MapDelete(dataMap, fieldNameCreate, fieldNameUpdate, fieldNameDelete)
 			if fieldNameUpdate != "" {
@@ -72,9 +68,8 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 			updateData = dataMap
 		default:
 			updates := gconv.String(m.data)
-			fmt.Println("我是updatedefault")
 			if fieldNameUpdate != "" && !gstr.Contains(updates, fieldNameUpdate) {
-				updates += fmt.Sprintf(`,%s='%s'`, fieldNameUpdate, gtime.Now().String())
+				updates += fmt.Sprintf(`,%s='%s'`, fieldNameUpdate,defaultOrValueTime(""))
 			}
 			updateData = updates
 		}
@@ -88,7 +83,6 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 	if !gstr.ContainsI(conditionStr, " WHERE ") {
 		return nil, gerror.New("there should be WHERE condition statement for UPDATE operation")
 	}
-	fmt.Println("====>>>>",newData)
 	return m.db.DoUpdate(
 		m.getLink(true),
 		m.tables,

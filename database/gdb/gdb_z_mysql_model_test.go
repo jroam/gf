@@ -100,30 +100,46 @@ func Test_Model_Insert(t *testing.T) {
 }
 
 func Test_Model_defaultOrValueTime(t *testing.T) {
-	//table := createInitTable()
-	table:="user_1605410946852960100"
-	//defer dropTable(table)
-	type User struct{
+	table := createTable()
+	defer dropTable(table)
+	db.SetDebug(true)
+	//timeLayout:="2006-01-02 15:04:05"
+	time1:="2020-11-20 20:11:14" //
+	type User1 struct{
 		Id int `json:"id"`
-		Nickname string `json:"nickname"`
-		CreateTime time.Time `json:"create_time"`
-		UpdateAt *gtime.Time `json:"update_time"`
+		CreateTime gtime.Time `json:"create_time"`
 	}
+
+	type User2 struct{
+		Id int `json:"id"`
+		CreateTime *gtime.Time `json:"create_time"`
+	}
+
+
+
 	gtest.C(t, func(t *gtest.T) {
-		t1:="2020-11-12 20:11:14"
-		user:=&User{}
-		//user.UpdateAt=time.Now().UTC()
-		user.Nickname="yy2"
-		user.UpdateAt=gtime.NewFromStr(t1).UTC()
-		user.CreateTime=gtime.NewFromStr(t1).Time.UTC()
-		//fmt.Println(user.)
-		db.SetDebug(true)
-		_, err := db.Table(table).Data(user).OmitEmpty().Where("id",10).Update()
-		if err!=nil{
-			g.Dump(err.Error())
+		user1:=&User1{
+			Id:         1,
+			CreateTime: *gtime.NewFromStr(time1).UTC(),
 		}
-		//t.Assert(err, nil)
-		g.Dump("done")
+		_, err := db.Table(table).Data(user1).Insert()
+		t.Assert(err,nil)
+		userEntity1:=&User1{}
+		err = db.Table(table).Data(user1).OmitEmpty().Where("id",1).Struct(&userEntity1)
+		t.Assert(err, nil)
+		t.Assert(userEntity1.CreateTime.String(),"2020-11-20 12:11:14")
+
+
+		user2:=&User1{
+			Id:         2,
+			CreateTime: *gtime.NewFromStr(time1).UTC(),
+		}
+		_, err = db.Table(table).Data(user2).Insert()
+		t.Assert(err,nil)
+		userEntity2:=&User2{}
+		err = db.Table(table).Data(user2).OmitEmpty().Where("id",2).Struct(&userEntity2)
+		t.Assert(err, nil)
+		t.Assert(userEntity2.CreateTime.String(),"2020-11-20 12:11:14")
 
 	})
 }
