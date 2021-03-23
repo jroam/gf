@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -17,6 +17,9 @@ import (
 // Ctx is a chaining function,
 // which sets the context for current logging.
 func (l *Logger) Ctx(ctx context.Context, keys ...interface{}) *Logger {
+	if ctx == nil {
+		return l
+	}
 	logger := (*Logger)(nil)
 	if l.parent == nil {
 		logger = l.Clone()

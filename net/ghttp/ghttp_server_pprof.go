@@ -1,9 +1,8 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
 // You can obtain one at https://github.com/gogf/gf.
-// pprof封装.
 
 package ghttp
 
@@ -19,17 +18,26 @@ import (
 type utilPProf struct{}
 
 const (
-	gDEFAULT_PPROF_PATTERN = "/debug/pprof"
+	defaultPProfServerName = "pprof-server"
+	defaultPProfPattern    = "/debug/pprof"
 )
+
+// StartPProfServer starts and runs a new server for pprof.
+func StartPProfServer(port int, pattern ...string) {
+	s := GetServer(defaultPProfServerName)
+	s.EnablePProf()
+	s.SetPort(port)
+	s.Run()
+}
 
 // EnablePProf enables PProf feature for server.
 func (s *Server) EnablePProf(pattern ...string) {
-	s.Domain(gDEFAULT_DOMAIN).EnablePProf(pattern...)
+	s.Domain(defaultDomainName).EnablePProf(pattern...)
 }
 
 // EnablePProf enables PProf feature for server of specified domain.
 func (d *Domain) EnablePProf(pattern ...string) {
-	p := gDEFAULT_PPROF_PATTERN
+	p := defaultPProfPattern
 	if len(pattern) > 0 && pattern[0] != "" {
 		p = pattern[0]
 	}
@@ -57,13 +65,18 @@ func (p *utilPProf) Index(r *Request) {
 		buffer, _ := gview.ParseContent(`
             <html>
             <head>
-                <title>gf ghttp pprof</title>
+                <title>GoFrame PProf</title>
             </head>
             {{$uri := .uri}}
             <body>
                 profiles:<br>
                 <table>
-                    {{range .profiles}}<tr><td align=right>{{.Count}}<td><a href="{{$uri}}{{.Name}}?debug=1">{{.Name}}</a>{{end}}
+                    {{range .profiles}}
+						<tr>
+							<td align=right>{{.Count}}</td>
+							<td><a href="{{$uri}}{{.Name}}?debug=1">{{.Name}}</a></td>
+						<tr>
+					{{end}}
                 </table>
                 <br><a href="{{$uri}}goroutine?debug=2">full goroutine stack dump</a><br>
             </body>

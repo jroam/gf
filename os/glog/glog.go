@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -8,7 +8,7 @@
 package glog
 
 import (
-	"github.com/gogf/gf/internal/cmdenv"
+	"github.com/gogf/gf/os/gcmd"
 	"github.com/gogf/gf/os/grpool"
 )
 
@@ -26,7 +26,7 @@ var (
 )
 
 func init() {
-	defaultDebug = cmdenv.Get("gf.glog.debug", true).Bool()
+	defaultDebug = gcmd.GetOptWithEnv("gf.glog.debug", true).Bool()
 	SetDebug(defaultDebug)
 }
 

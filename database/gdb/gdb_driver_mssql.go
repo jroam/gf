@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -13,8 +13,8 @@ package gdb
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
+	"github.com/gogf/gf/errors/gerror"
 	"strconv"
 	"strings"
 
@@ -54,6 +54,21 @@ func (d *DriverMssql) Open(config *ConfigNode) (*sql.DB, error) {
 	} else {
 		return nil, err
 	}
+}
+
+// FilteredLinkInfo retrieves and returns filtered `linkInfo` that can be using for
+// logging or tracing purpose.
+func (d *DriverMssql) FilteredLinkInfo() string {
+	linkInfo := d.GetConfig().LinkInfo
+	if linkInfo == "" {
+		return ""
+	}
+	s, _ := gregex.ReplaceString(
+		`(.+);\s*password=(.+);\s*server=(.+)`,
+		`$1;password=xxx;server=$3`,
+		d.GetConfig().LinkInfo,
+	)
+	return s
 }
 
 // GetChars returns the security char for this type of database.
@@ -170,12 +185,12 @@ func (d *DriverMssql) parseSql(sql string) string {
 // It's mainly used in cli tool chain for automatically generating the models.
 func (d *DriverMssql) Tables(schema ...string) (tables []string, err error) {
 	var result Result
-	link, err := d.DB.GetSlave(schema...)
+	link, err := d.db.GetSlave(schema...)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err = d.DB.DoGetAll(link, `SELECT NAME FROM SYSOBJECTS WHERE XTYPE='U' AND STATUS >= 0 ORDER BY NAME`)
+	result, err = d.db.DoGetAll(link, `SELECT NAME FROM SYSOBJECTS WHERE XTYPE='U' AND STATUS >= 0 ORDER BY NAME`)
 	if err != nil {
 		return
 	}
@@ -192,9 +207,9 @@ func (d *DriverMssql) TableFields(table string, schema ...string) (fields map[st
 	charL, charR := d.GetChars()
 	table = gstr.Trim(table, charL+charR)
 	if gstr.Contains(table, " ") {
-		return nil, errors.New("function TableFields supports only single table operations")
+		return nil, gerror.New("function TableFields supports only single table operations")
 	}
-	checkSchema := d.DB.GetSchema()
+	checkSchema := d.db.GetSchema()
 	if len(schema) > 0 && schema[0] != "" {
 		checkSchema = schema[0]
 	}
@@ -205,7 +220,7 @@ func (d *DriverMssql) TableFields(table string, schema ...string) (fields map[st
 				result Result
 				link   *sql.DB
 			)
-			link, err = d.DB.GetSlave(checkSchema)
+			link, err = d.db.GetSlave(checkSchema)
 			if err != nil {
 				return nil, err
 			}
@@ -240,7 +255,7 @@ ORDER BY a.id,a.colorder`,
 				strings.ToUpper(table),
 			)
 			structureSql, _ = gregex.ReplaceString(`[\n\r\s]+`, " ", gstr.Trim(structureSql))
-			result, err = d.DB.DoGetAll(link, structureSql)
+			result, err = d.db.DoGetAll(link, structureSql)
 			if err != nil {
 				return nil, err
 			}

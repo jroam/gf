@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -174,6 +174,19 @@ func Test_Func(t *testing.T) {
 		result, err = gview.ParseContent(str, nil)
 		t.Assert(err, nil)
 		t.Assert(result, `ILoveGoFrame`)
+	})
+	// eq: multiple values.
+	gtest.C(t, func(t *gtest.T) {
+		str := `{{eq 1 2 1 3 4 5}}`
+		result, err := gview.ParseContent(str, nil)
+		t.Assert(err != nil, false)
+		t.Assert(result, `true`)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		str := `{{eq 6 2 1 3 4 5}}`
+		result, err := gview.ParseContent(str, nil)
+		t.Assert(err != nil, false)
+		t.Assert(result, `false`)
 	})
 }
 
@@ -398,5 +411,17 @@ func Test_BuildInFuncDump(t *testing.T) {
 		t.Assert(err, nil)
 		t.Assert(gstr.Contains(r, `"name": "john"`), true)
 		t.Assert(gstr.Contains(r, `"score": 100`), true)
+	})
+}
+
+func Test_BuildInFuncJson(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		v := gview.New()
+		v.Assign("v", g.Map{
+			"name": "john",
+		})
+		r, err := v.ParseContent("{{json .v}}")
+		t.Assert(err, nil)
+		t.Assert(r, `{"name":"john"}`)
 	})
 }

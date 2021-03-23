@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -13,8 +13,8 @@ package gdb
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
+	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/internal/intlog"
 	"github.com/gogf/gf/text/gstr"
 	"strings"
@@ -54,6 +54,21 @@ func (d *DriverPgsql) Open(config *ConfigNode) (*sql.DB, error) {
 	}
 }
 
+// FilteredLinkInfo retrieves and returns filtered `linkInfo` that can be using for
+// logging or tracing purpose.
+func (d *DriverPgsql) FilteredLinkInfo() string {
+	linkInfo := d.GetConfig().LinkInfo
+	if linkInfo == "" {
+		return ""
+	}
+	s, _ := gregex.ReplaceString(
+		`(.+?)\s*password=(.+)\s*host=(.+)`,
+		`$1 password=xxx host=$3`,
+		linkInfo,
+	)
+	return s
+}
+
 // GetChars returns the security char for this type of database.
 func (d *DriverPgsql) GetChars() (charLeft string, charRight string) {
 	return "\"", "\""
@@ -75,7 +90,7 @@ func (d *DriverPgsql) HandleSqlBeforeCommit(link Link, sql string, args []interf
 // It's mainly used in cli tool chain for automatically generating the models.
 func (d *DriverPgsql) Tables(schema ...string) (tables []string, err error) {
 	var result Result
-	link, err := d.DB.GetSlave(schema...)
+	link, err := d.db.GetSlave(schema...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +98,7 @@ func (d *DriverPgsql) Tables(schema ...string) (tables []string, err error) {
 	if len(schema) > 0 && schema[0] != "" {
 		query = fmt.Sprintf("SELECT TABLENAME FROM PG_TABLES WHERE SCHEMANAME = '%s' ORDER BY TABLENAME", schema[0])
 	}
-	result, err = d.DB.DoGetAll(link, query)
+	result, err = d.db.DoGetAll(link, query)
 	if err != nil {
 		return
 	}
@@ -100,10 +115,10 @@ func (d *DriverPgsql) TableFields(table string, schema ...string) (fields map[st
 	charL, charR := d.GetChars()
 	table = gstr.Trim(table, charL+charR)
 	if gstr.Contains(table, " ") {
-		return nil, errors.New("function TableFields supports only single table operations")
+		return nil, gerror.New("function TableFields supports only single table operations")
 	}
 	table, _ = gregex.ReplaceString("\"", "", table)
-	checkSchema := d.DB.GetSchema()
+	checkSchema := d.db.GetSchema()
 	if len(schema) > 0 && schema[0] != "" {
 		checkSchema = schema[0]
 	}
@@ -114,7 +129,7 @@ func (d *DriverPgsql) TableFields(table string, schema ...string) (fields map[st
 				result Result
 				link   *sql.DB
 			)
-			link, err = d.DB.GetSlave(checkSchema)
+			link, err = d.db.GetSlave(checkSchema)
 			if err != nil {
 				return nil, err
 			}
@@ -126,7 +141,7 @@ ORDER BY a.attnum`,
 				strings.ToLower(table),
 			)
 			structureSql, _ = gregex.ReplaceString(`[\n\r\s]+`, " ", gstr.Trim(structureSql))
-			result, err = d.DB.DoGetAll(link, structureSql)
+			result, err = d.db.DoGetAll(link, structureSql)
 			if err != nil {
 				return nil, err
 			}

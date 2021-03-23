@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -58,20 +58,31 @@ func (s *Server) doBindObject(
 			methodMap[strings.TrimSpace(v)] = true
 		}
 	}
-	// 当pattern中的method为all时，去掉该method，以便于后续方法判断
+	// If the `method` in `pattern` is `defaultMethod`,
+	// it removes for convenience for next statement control.
 	domain, method, path, err := s.parsePattern(pattern)
 	if err != nil {
 		s.Logger().Fatal(err)
 		return
 	}
-	if strings.EqualFold(method, gDEFAULT_METHOD) {
+	if strings.EqualFold(method, defaultMethod) {
 		pattern = s.serveHandlerKey("", path, domain)
 	}
-	m := make(map[string]*handlerItem)
-	v := reflect.ValueOf(object)
-	t := v.Type()
-	initFunc := (func(*Request))(nil)
-	shutFunc := (func(*Request))(nil)
+	var (
+		m        = make(map[string]*handlerItem)
+		v        = reflect.ValueOf(object)
+		t        = v.Type()
+		initFunc func(*Request)
+		shutFunc func(*Request)
+	)
+	// If given `object` is not pointer, it then creates a temporary one,
+	// of which the value is `v`.
+	if v.Kind() == reflect.Struct {
+		newValue := reflect.New(t)
+		newValue.Elem().Set(v)
+		v = newValue
+		t = v.Type()
+	}
 	structName := t.Elem().Name()
 	if v.MethodByName("Init").IsValid() {
 		initFunc = v.MethodByName("Init").Interface().(func(*Request))
@@ -111,7 +122,7 @@ func (s *Server) doBindObject(
 		key := s.mergeBuildInNameToPattern(pattern, structName, methodName, true)
 		m[key] = &handlerItem{
 			itemName:   fmt.Sprintf(`%s.%s.%s`, pkgPath, objName, methodName),
-			itemType:   gHANDLER_TYPE_OBJECT,
+			itemType:   handlerTypeObject,
 			itemFunc:   itemFunc,
 			initFunc:   initFunc,
 			shutFunc:   shutFunc,
@@ -133,7 +144,7 @@ func (s *Server) doBindObject(
 			}
 			m[k] = &handlerItem{
 				itemName:   fmt.Sprintf(`%s.%s.%s`, pkgPath, objName, methodName),
-				itemType:   gHANDLER_TYPE_OBJECT,
+				itemType:   handlerTypeObject,
 				itemFunc:   itemFunc,
 				initFunc:   initFunc,
 				shutFunc:   shutFunc,
@@ -149,9 +160,21 @@ func (s *Server) doBindObjectMethod(
 	pattern string, object interface{}, method string,
 	middleware []HandlerFunc, source string,
 ) {
-	m := make(map[string]*handlerItem)
-	v := reflect.ValueOf(object)
-	t := v.Type()
+	var (
+		m        = make(map[string]*handlerItem)
+		v        = reflect.ValueOf(object)
+		t        = v.Type()
+		initFunc func(*Request)
+		shutFunc func(*Request)
+	)
+	// If given `object` is not pointer, it then creates a temporary one,
+	// of which the value is `v`.
+	if v.Kind() == reflect.Struct {
+		newValue := reflect.New(t)
+		newValue.Elem().Set(v)
+		v = newValue
+		t = v.Type()
+	}
 	structName := t.Elem().Name()
 	methodName := strings.TrimSpace(method)
 	methodValue := v.MethodByName(methodName)
@@ -159,8 +182,6 @@ func (s *Server) doBindObjectMethod(
 		s.Logger().Fatal("invalid method name: " + methodName)
 		return
 	}
-	initFunc := (func(*Request))(nil)
-	shutFunc := (func(*Request))(nil)
 	if v.MethodByName("Init").IsValid() {
 		initFunc = v.MethodByName("Init").Interface().(func(*Request))
 	}
@@ -184,7 +205,7 @@ func (s *Server) doBindObjectMethod(
 	key := s.mergeBuildInNameToPattern(pattern, structName, methodName, false)
 	m[key] = &handlerItem{
 		itemName:   fmt.Sprintf(`%s.%s.%s`, pkgPath, objName, methodName),
-		itemType:   gHANDLER_TYPE_OBJECT,
+		itemType:   handlerTypeObject,
 		itemFunc:   itemFunc,
 		initFunc:   initFunc,
 		shutFunc:   shutFunc,
@@ -199,11 +220,21 @@ func (s *Server) doBindObjectRest(
 	pattern string, object interface{},
 	middleware []HandlerFunc, source string,
 ) {
-	m := make(map[string]*handlerItem)
-	v := reflect.ValueOf(object)
-	t := v.Type()
-	initFunc := (func(*Request))(nil)
-	shutFunc := (func(*Request))(nil)
+	var (
+		m        = make(map[string]*handlerItem)
+		v        = reflect.ValueOf(object)
+		t        = v.Type()
+		initFunc func(*Request)
+		shutFunc func(*Request)
+	)
+	// If given `object` is not pointer, it then creates a temporary one,
+	// of which the value is `v`.
+	if v.Kind() == reflect.Struct {
+		newValue := reflect.New(t)
+		newValue.Elem().Set(v)
+		v = newValue
+		t = v.Type()
+	}
 	structName := t.Elem().Name()
 	if v.MethodByName("Init").IsValid() {
 		initFunc = v.MethodByName("Init").Interface().(func(*Request))
@@ -233,7 +264,7 @@ func (s *Server) doBindObjectRest(
 		key := s.mergeBuildInNameToPattern(methodName+":"+pattern, structName, methodName, false)
 		m[key] = &handlerItem{
 			itemName:   fmt.Sprintf(`%s.%s.%s`, pkgPath, objName, methodName),
-			itemType:   gHANDLER_TYPE_OBJECT,
+			itemType:   handlerTypeObject,
 			itemFunc:   itemFunc,
 			initFunc:   initFunc,
 			shutFunc:   shutFunc,

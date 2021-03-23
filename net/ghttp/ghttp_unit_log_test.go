@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -41,7 +41,7 @@ func Test_Log(t *testing.T) {
 		defer s.Shutdown()
 		defer gfile.Remove(logDir)
 		time.Sleep(100 * time.Millisecond)
-		client := ghttp.NewClient()
+		client := g.Client()
 		client.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 
 		t.Assert(client.GetContent("/hello"), "hello")

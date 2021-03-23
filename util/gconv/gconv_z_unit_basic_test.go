@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -38,5 +38,13 @@ func Test_Basic(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		s := "-0xFF"
 		t.Assert(gconv.Int(s), int64(-0xFF))
+	})
+}
+
+func Test_Duration(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		d := gconv.Duration("1s")
+		t.Assert(d.String(), "1s")
+		t.Assert(d.Nanoseconds(), 1000000000)
 	})
 }

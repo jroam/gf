@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with gm file,
@@ -55,7 +55,7 @@ func (m *StrStrMap) Iterator(f func(k string, v string) bool) {
 
 // Clone returns a new hash map with copy of current map data.
 func (m *StrStrMap) Clone() *StrStrMap {
-	return NewStrStrMapFrom(m.MapCopy(), !m.mu.IsSafe())
+	return NewStrStrMapFrom(m.MapCopy(), m.mu.IsSafe())
 }
 
 // Map returns the underlying data map.

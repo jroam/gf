@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -7,6 +7,7 @@
 package gvalid
 
 import (
+	"errors"
 	"github.com/gogf/gf/text/gregex"
 	"strings"
 )
@@ -131,6 +132,15 @@ func (e *Error) FirstString() (err string) {
 	return
 }
 
+// Current is alis of FirstString, which implements interface gerror.ApiCurrent.
+func (e *Error) Current() error {
+	if e == nil {
+		return nil
+	}
+	_, err := e.FirstRule()
+	return errors.New(err)
+}
+
 // String returns all error messages as string, multiple error messages joined using char ';'.
 func (e *Error) String() string {
 	if e == nil {
@@ -158,10 +168,16 @@ func (e *Error) Strings() (errs []string) {
 		for _, v := range e.rules {
 			name, rule, _ := parseSequenceTag(v)
 			if m, ok := e.errors[name]; ok {
+				// validation error checks.
 				for _, rule := range strings.Split(rule, "|") {
-					array := strings.Split(rule, ":")
-					rule = strings.TrimSpace(array[0])
+					rule = strings.TrimSpace(strings.Split(rule, ":")[0])
 					if err, ok := m[rule]; ok {
+						errs = append(errs, err)
+					}
+				}
+				// internal error checks.
+				for k, _ := range internalErrKeyMap {
+					if err, ok := m[k]; ok {
 						errs = append(errs, err)
 					}
 				}

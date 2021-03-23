@@ -1,4 +1,4 @@
-// Copyright 2019 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -16,11 +16,12 @@ import (
 
 // Timer is a Hierarchical Timing Wheel manager for timing jobs.
 type Timer struct {
-	status     *gtype.Int // Timer status.
-	wheels     []*wheel   // The underlying wheels.
-	length     int        // Max level of the wheels.
-	number     int        // Slot Number of each wheel.
-	intervalMs int64      // Interval of the slot in milliseconds.
+	status     *gtype.Int       // Timer status.
+	wheels     []*wheel         // The underlying wheels.
+	length     int              // Max level of the wheels.
+	number     int              // Slot Number of each wheel.
+	intervalMs int64            // Interval of the slot in milliseconds.
+	nowFunc    func() time.Time // nowFunc returns the current time, which can be custom.
 }
 
 // Wheel is a slot wrapper for timing job install and uninstall.
@@ -38,21 +39,30 @@ type wheel struct {
 // New creates and returns a Hierarchical Timing Wheel designed timer.
 // The parameter <interval> specifies the interval of the timer.
 // The optional parameter <level> specifies the wheels count of the timer,
-// which is gDEFAULT_WHEEL_LEVEL in default.
+// which is defaultWheelLevel in default.
 func New(slot int, interval time.Duration, level ...int) *Timer {
+	t := doNewWithoutAutoStart(slot, interval, level...)
+	t.wheels[0].start()
+	return t
+}
+
+func doNewWithoutAutoStart(slot int, interval time.Duration, level ...int) *Timer {
 	if slot <= 0 {
 		panic(fmt.Sprintf("invalid slot number: %d", slot))
 	}
-	length := gDEFAULT_WHEEL_LEVEL
+	length := defaultWheelLevel
 	if len(level) > 0 {
 		length = level[0]
 	}
 	t := &Timer{
-		status:     gtype.NewInt(STATUS_RUNNING),
+		status:     gtype.NewInt(StatusRunning),
 		wheels:     make([]*wheel, length),
 		length:     length,
 		number:     slot,
 		intervalMs: interval.Nanoseconds() / 1e6,
+		nowFunc: func() time.Time {
+			return time.Now()
+		},
 	}
 	for i := 0; i < length; i++ {
 		if i > 0 {
@@ -62,12 +72,15 @@ func New(slot int, interval time.Duration, level ...int) *Timer {
 			}
 			w := t.newWheel(i, slot, n)
 			t.wheels[i] = w
-			t.wheels[i-1].addEntry(n, w.proceed, false, gDEFAULT_TIMES, STATUS_READY)
+			t.wheels[i-1].addEntry(n, w.proceed, false, defaultTimes, StatusReady)
+			if i == length-1 {
+				t.wheels[i].addEntry(n, w.proceed, false, defaultTimes, StatusReady)
+			}
 		} else {
-			t.wheels[i] = t.newWheel(i, slot, interval)
+			w := t.newWheel(i, slot, interval)
+			t.wheels[i] = w
 		}
 	}
-	t.wheels[0].start()
 	return t
 }
 
@@ -91,7 +104,7 @@ func (t *Timer) newWheel(level int, slot int, interval time.Duration) *wheel {
 
 // Add adds a timing job to the timer, which runs in interval of <interval>.
 func (t *Timer) Add(interval time.Duration, job JobFunc) *Entry {
-	return t.doAddEntry(interval, job, false, gDEFAULT_TIMES, STATUS_READY)
+	return t.doAddEntry(interval, job, false, defaultTimes, StatusReady)
 }
 
 // AddEntry adds a timing job to the timer with detailed parameters.
@@ -111,17 +124,17 @@ func (t *Timer) AddEntry(interval time.Duration, job JobFunc, singleton bool, ti
 
 // AddSingleton is a convenience function for add singleton mode job.
 func (t *Timer) AddSingleton(interval time.Duration, job JobFunc) *Entry {
-	return t.doAddEntry(interval, job, true, gDEFAULT_TIMES, STATUS_READY)
+	return t.doAddEntry(interval, job, true, defaultTimes, StatusReady)
 }
 
 // AddOnce is a convenience function for adding a job which only runs once and then exits.
 func (t *Timer) AddOnce(interval time.Duration, job JobFunc) *Entry {
-	return t.doAddEntry(interval, job, true, 1, STATUS_READY)
+	return t.doAddEntry(interval, job, true, 1, StatusReady)
 }
 
 // AddTimes is a convenience function for adding a job which is limited running times.
 func (t *Timer) AddTimes(interval time.Duration, times int, job JobFunc) *Entry {
-	return t.doAddEntry(interval, job, true, times, STATUS_READY)
+	return t.doAddEntry(interval, job, true, times, StatusReady)
 }
 
 // DelayAdd adds a timing job after delay of <interval> duration.
@@ -166,17 +179,17 @@ func (t *Timer) DelayAddTimes(delay time.Duration, interval time.Duration, times
 
 // Start starts the timer.
 func (t *Timer) Start() {
-	t.status.Set(STATUS_RUNNING)
+	t.status.Set(StatusRunning)
 }
 
 // Stop stops the timer.
 func (t *Timer) Stop() {
-	t.status.Set(STATUS_STOPPED)
+	t.status.Set(StatusStopped)
 }
 
 // Close closes the timer.
 func (t *Timer) Close() {
-	t.status.Set(STATUS_CLOSED)
+	t.status.Set(StatusClosed)
 }
 
 // doAddEntry adds a timing job to timer for internal usage.
@@ -185,8 +198,8 @@ func (t *Timer) doAddEntry(interval time.Duration, job JobFunc, singleton bool, 
 }
 
 // doAddEntryByParent adds a timing job to timer with parent entry for internal usage.
-func (t *Timer) doAddEntryByParent(interval int64, parent *Entry) *Entry {
-	return t.wheels[t.getLevelByIntervalMs(interval)].addEntryByParent(interval, parent)
+func (t *Timer) doAddEntryByParent(rollOn bool, nowMs, interval int64, parent *Entry) *Entry {
+	return t.wheels[t.getLevelByIntervalMs(interval)].addEntryByParent(rollOn, nowMs, interval, parent)
 }
 
 // getLevelByIntervalMs calculates and returns the level of timer wheel with given milliseconds.

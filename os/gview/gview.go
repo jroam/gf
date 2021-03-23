@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -16,7 +16,7 @@ import (
 
 	"github.com/gogf/gf"
 	"github.com/gogf/gf/container/garray"
-	"github.com/gogf/gf/internal/cmdenv"
+	"github.com/gogf/gf/os/gcmd"
 	"github.com/gogf/gf/os/gfile"
 	"github.com/gogf/gf/os/glog"
 )
@@ -71,7 +71,7 @@ func New(path ...string) *View {
 		}
 	} else {
 		// Customized dir path from env/cmd.
-		if envPath := cmdenv.Get("gf.gview.path").String(); envPath != "" {
+		if envPath := gcmd.GetOptWithEnv("gf.gview.path").String(); envPath != "" {
 			if gfile.Exists(envPath) {
 				if err := view.SetPath(envPath); err != nil {
 					intlog.Error(err)
@@ -137,6 +137,7 @@ func New(path ...string) *View {
 		"dump":       view.buildInFuncDump,
 		"map":        view.buildInFuncMap,
 		"maps":       view.buildInFuncMaps,
+		"json":       view.buildInFuncJson,
 	})
 
 	return view

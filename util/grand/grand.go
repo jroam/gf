@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -9,6 +9,7 @@ package grand
 
 import (
 	"encoding/binary"
+	"time"
 	"unsafe"
 )
 
@@ -95,6 +96,20 @@ func S(n int, symbols ...bool) string {
 		}
 	}
 	return *(*string)(unsafe.Pointer(&b))
+}
+
+// D returns a random time.Duration between min and max: [min, max].
+func D(min, max time.Duration) time.Duration {
+	multiple := int64(1)
+	if min != 0 {
+		for min%10 == 0 {
+			multiple *= 10
+			min /= 10
+			max /= 10
+		}
+	}
+	n := int64(N(int(min), int(max)))
+	return time.Duration(n * multiple)
 }
 
 // Str randomly picks and returns <n> count of chars from given string <s>.

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -7,8 +7,8 @@
 package gfile
 
 import (
-	"github.com/gogf/gf/internal/cmdenv"
 	"github.com/gogf/gf/os/gcache"
+	"github.com/gogf/gf/os/gcmd"
 	"github.com/gogf/gf/os/gfsnotify"
 	"time"
 )
@@ -20,7 +20,7 @@ const (
 
 var (
 	// Default expire time for file content caching.
-	cacheExpire = cmdenv.Get("gf.gfile.cache", gDEFAULT_CACHE_EXPIRE).Duration()
+	cacheExpire = gcmd.GetOptWithEnv("gf.gfile.cache", gDEFAULT_CACHE_EXPIRE).Duration()
 
 	// internalCache is the memory cache for internal usage.
 	internalCache = gcache.New()

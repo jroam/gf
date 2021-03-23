@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -84,6 +84,7 @@ func (r *Response) buildInVars(params ...map[string]interface{}) map[string]inte
 	gutil.MapMerge(m, map[string]interface{}{
 		"Form":    r.Request.GetFormMap(),
 		"Query":   r.Request.GetQueryMap(),
+		"Request": r.Request.GetMap(),
 		"Cookie":  r.Request.Cookie.Map(),
 		"Session": r.Request.Session.Map(),
 	})

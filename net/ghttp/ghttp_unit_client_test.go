@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -7,13 +7,18 @@
 package ghttp_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"github.com/gogf/gf/debug/gdebug"
-	"github.com/gogf/gf/os/gfile"
-	"github.com/gogf/gf/util/guid"
+	"io/ioutil"
+	"net/http"
 	"testing"
 	"time"
+
+	"github.com/gogf/gf/debug/gdebug"
+	"github.com/gogf/gf/errors/gerror"
+	"github.com/gogf/gf/os/gfile"
+	"github.com/gogf/gf/util/guid"
 
 	"github.com/gogf/gf/frame/g"
 	"github.com/gogf/gf/net/ghttp"
@@ -34,7 +39,7 @@ func Test_Client_Basic(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
 		url := fmt.Sprintf("http://127.0.0.1:%d", p)
-		client := ghttp.NewClient()
+		client := g.Client()
 		client.SetPrefix(url)
 
 		t.Assert(ghttp.GetContent(""), ``)
@@ -82,7 +87,7 @@ func Test_Client_Cookie(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 
 		c.SetCookie("test", "0123456789")
@@ -103,7 +108,7 @@ func Test_Client_MapParam(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 
 		t.Assert(c.GetContent("/map", g.Map{"test": "1234567890"}), "1234567890")
@@ -125,7 +130,7 @@ func Test_Client_Cookies(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 
 		resp, err := c.Get("/cookie")
@@ -159,7 +164,7 @@ func Test_Client_Chain_Header(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 
 		t.Assert(c.Header(g.MapStrStr{"test1": "1234567890"}).GetContent("/header1"), "1234567890")
@@ -182,7 +187,7 @@ func Test_Client_Chain_Context(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 
 		ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -207,7 +212,7 @@ func Test_Client_Chain_Timeout(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 		t.Assert(c.Timeout(100*time.Millisecond).GetContent("/timeout"), "")
 		t.Assert(c.Timeout(2000*time.Millisecond).GetContent("/timeout"), "ok")
@@ -227,7 +232,7 @@ func Test_Client_Chain_ContentJson(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 		t.Assert(c.ContentJson().PostContent("/json", g.Map{
 			"name":  "john",
@@ -256,7 +261,7 @@ func Test_Client_Chain_ContentXml(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 		t.Assert(c.ContentXml().PostContent("/xml", g.Map{
 			"name":  "john",
@@ -285,7 +290,7 @@ func Test_Client_Param_Containing_Special_Char(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		c := ghttp.NewClient()
+		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 		t.Assert(c.PostContent("/", "k1=MTIxMg==&k2=100"), "k1=MTIxMg==&k2=100")
 		t.Assert(c.PostContent("/", g.Map{
@@ -330,5 +335,109 @@ func Test_Client_File_And_Param(t *testing.T) {
 		c := g.Client()
 		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
 		t.Assert(c.PostContent("/", data), data["json"].(string)+gfile.GetContents(path))
+	})
+}
+
+func Test_Client_Middleware(t *testing.T) {
+	p, _ := ports.PopRand()
+	s := g.Server(p)
+	isServerHandler := false
+	s.BindHandler("/", func(r *ghttp.Request) {
+		isServerHandler = true
+	})
+	s.SetPort(p)
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			str1 = ""
+			str2 = "resp body"
+		)
+		c := g.Client().SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
+		c.Use(func(c *ghttp.Client, r *http.Request) (resp *ghttp.ClientResponse, err error) {
+			str1 += "a"
+			resp, err = c.Next(r)
+			if err != nil {
+				return nil, err
+			}
+			str1 += "b"
+			return
+		})
+		c.Use(func(c *ghttp.Client, r *http.Request) (resp *ghttp.ClientResponse, err error) {
+			str1 += "c"
+			resp, err = c.Next(r)
+			if err != nil {
+				return nil, err
+			}
+			str1 += "d"
+			return
+		})
+		c.Use(func(c *ghttp.Client, r *http.Request) (resp *ghttp.ClientResponse, err error) {
+			str1 += "e"
+			resp, err = c.Next(r)
+			if err != nil {
+				return nil, err
+			}
+			resp.Response.Body = ioutil.NopCloser(bytes.NewBufferString(str2))
+			str1 += "f"
+			return
+		})
+		resp, err := c.Get("/")
+		t.Assert(str1, "acefdb")
+		t.Assert(err, nil)
+		t.Assert(resp.ReadAllString(), str2)
+		t.Assert(isServerHandler, true)
+
+		// test abort, abort will not send
+		var (
+			str3     = ""
+			abortStr = "abort request"
+		)
+
+		c = g.Client().SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
+		c.Use(func(c *ghttp.Client, r *http.Request) (resp *ghttp.ClientResponse, err error) {
+			str3 += "a"
+			resp, err = c.Next(r)
+			str3 += "b"
+			return
+		})
+		c.Use(func(c *ghttp.Client, r *http.Request) (*ghttp.ClientResponse, error) {
+			str3 += "c"
+			return nil, gerror.New(abortStr)
+		})
+		c.Use(func(c *ghttp.Client, r *http.Request) (resp *ghttp.ClientResponse, err error) {
+			str3 += "f"
+			resp, err = c.Next(r)
+			str3 += "g"
+			return
+		})
+		resp, err = c.Get("/")
+		t.Assert(err, abortStr)
+		t.Assert(str3, "acb")
+		t.Assert(resp, nil)
+	})
+}
+
+func Test_Client_Agent(t *testing.T) {
+	p, _ := ports.PopRand()
+	s := g.Server(p)
+	s.BindHandler("/", func(r *ghttp.Request) {
+		r.Response.Write(r.UserAgent())
+	})
+	s.SetPort(p)
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+
+	gtest.C(t, func(t *gtest.T) {
+		c := g.Client().SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
+		c.SetAgent("test")
+		t.Assert(c.GetContent("/"), "test")
 	})
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -8,9 +8,8 @@ package ghttp
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
 	"github.com/gogf/gf/debug/gdebug"
+	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/internal/intlog"
 	"net/http"
 	"os"
@@ -35,7 +34,7 @@ import (
 
 func init() {
 	// Initialize the methods map.
-	for _, v := range strings.Split(HTTP_METHODS, ",") {
+	for _, v := range strings.Split(supportedHttpMethods, ",") {
 		methodsMap[v] = struct{}{}
 	}
 }
@@ -56,7 +55,7 @@ func serverProcessInit() {
 	}
 	// This means it is a restart server, it should kill its parent before starting its listening,
 	// to avoid duplicated port listening in two processes.
-	if genv.Get(gADMIN_ACTION_RESTART_ENVKEY) != "" {
+	if genv.Get(adminActionRestartEnvKey) != "" {
 		if p, e := os.FindProcess(gproc.PPid()); e == nil {
 			p.Kill()
 			p.Wait()
@@ -87,7 +86,7 @@ func serverProcessInit() {
 // Note that the parameter <name> should be unique for different servers. It returns an existing
 // server instance if given <name> is already existing in the server mapping.
 func GetServer(name ...interface{}) *Server {
-	serverName := gDEFAULT_SERVER
+	serverName := defaultServerName
 	if len(name) > 0 && name[0] != "" {
 		serverName = gconv.String(name[0])
 	}
@@ -100,13 +99,13 @@ func GetServer(name ...interface{}) *Server {
 		servers:          make([]*gracefulServer, 0),
 		closeChan:        make(chan struct{}, 10000),
 		serverCount:      gtype.NewInt(),
-		statusHandlerMap: make(map[string]HandlerFunc),
+		statusHandlerMap: make(map[string][]HandlerFunc),
 		serveTree:        make(map[string]interface{}),
 		serveCache:       gcache.New(),
 		routesMap:        make(map[string][]registeredRouteItem),
 	}
 	// Initialize the server using default configurations.
-	if err := s.SetConfig(Config()); err != nil {
+	if err := s.SetConfig(NewConfig()); err != nil {
 		panic(err)
 	}
 	// Record the server to internal server mapping by name.
@@ -124,14 +123,14 @@ func (s *Server) Start() error {
 	serverProcessInit()
 
 	// Server can only be run once.
-	if s.Status() == SERVER_STATUS_RUNNING {
-		return errors.New("[ghttp] server is already running")
+	if s.Status() == ServerStatusRunning {
+		return gerror.New("server is already running")
 	}
 
 	// Logging path setting check.
-	if s.config.LogPath != "" {
+	if s.config.LogPath != "" && s.config.LogPath != s.config.Logger.GetPath() {
 		if err := s.config.Logger.SetPath(s.config.LogPath); err != nil {
-			return errors.New(fmt.Sprintf("[ghttp] set log path '%s' error: %v", s.config.LogPath, err))
+			return err
 		}
 	}
 	// Default session storage.
@@ -141,7 +140,7 @@ func (s *Server) Start() error {
 			path = gfile.Join(s.config.SessionPath, s.name)
 			if !gfile.Exists(path) {
 				if err := gfile.Mkdir(path); err != nil {
-					return errors.New(fmt.Sprintf("[ghttp] mkdir failed for '%s': %v", path, err))
+					return gerror.Wrapf(err, `mkdir failed for "%s"`, path)
 				}
 			}
 		}
@@ -175,12 +174,12 @@ func (s *Server) Start() error {
 	// If there's no route registered  and no static service enabled,
 	// it then returns an error of invalid usage of server.
 	if len(s.routesMap) == 0 && !s.config.FileServerEnabled {
-		return errors.New(`[ghttp] there's no route set or static feature enabled, did you forget import the router?`)
+		return gerror.New(`there's no route set or static feature enabled, did you forget import the router?`)
 	}
 
 	// Start the HTTP server.
 	reloaded := false
-	fdMapStr := genv.Get(gADMIN_ACTION_RELOAD_ENVKEY)
+	fdMapStr := genv.Get(adminActionReloadEnvKey)
 	if len(fdMapStr) > 0 {
 		sfm := bufferToServerFdMap([]byte(fdMapStr))
 		if v, ok := sfm[s.name]; ok {
@@ -195,8 +194,8 @@ func (s *Server) Start() error {
 	// If this is a child process, it then notifies its parent exit.
 	if gproc.IsChild() {
 		gtimer.SetTimeout(2*time.Second, func() {
-			if err := gproc.Send(gproc.PPid(), []byte("exit"), gADMIN_GPROC_COMM_GROUP); err != nil {
-				//glog.Error("[ghttp] server error in process communication:", err)
+			if err := gproc.Send(gproc.PPid(), []byte("exit"), adminGProcCommGroup); err != nil {
+				//glog.Error("server error in process communication:", err)
 			}
 		})
 	}
@@ -256,9 +255,9 @@ func (s *Server) GetRouterArray() []RouterItem {
 				handler:    registeredItem.handler,
 			}
 			switch item.handler.itemType {
-			case gHANDLER_TYPE_CONTROLLER, gHANDLER_TYPE_OBJECT, gHANDLER_TYPE_HANDLER:
+			case handlerTypeController, handlerTypeObject, handlerTypeHandler:
 				item.IsServiceHandler = true
-			case gHANDLER_TYPE_MIDDLEWARE:
+			case handlerTypeMiddleware:
 				item.Middleware = "GLOBAL MIDDLEWARE"
 			}
 			if len(item.handler.middleware) > 0 {
@@ -280,9 +279,9 @@ func (s *Server) GetRouterArray() []RouterItem {
 					if r = strings.Compare(item1.Domain, item2.Domain); r == 0 {
 						if r = strings.Compare(item1.Route, item2.Route); r == 0 {
 							if r = strings.Compare(item1.Method, item2.Method); r == 0 {
-								if item1.handler.itemType == gHANDLER_TYPE_MIDDLEWARE && item2.handler.itemType != gHANDLER_TYPE_MIDDLEWARE {
+								if item1.handler.itemType == handlerTypeMiddleware && item2.handler.itemType != handlerTypeMiddleware {
 									return -1
-								} else if item1.handler.itemType == gHANDLER_TYPE_MIDDLEWARE && item2.handler.itemType == gHANDLER_TYPE_MIDDLEWARE {
+								} else if item1.handler.itemType == handlerTypeMiddleware && item2.handler.itemType == handlerTypeMiddleware {
 									return 1
 								} else if r = strings.Compare(item1.Middleware, item2.Middleware); r == 0 {
 									r = item2.Priority - item1.Priority
@@ -317,10 +316,12 @@ func (s *Server) Run() {
 	if len(s.plugins) > 0 {
 		for _, p := range s.plugins {
 			intlog.Printf(`remove plugin: %s`, p.Name())
-			p.Remove()
+			if err := p.Remove(); err != nil {
+				intlog.Errorf("%+v", err)
+			}
 		}
 	}
-	s.Logger().Printf("[ghttp] %d: all servers shutdown", gproc.Pid())
+	s.Logger().Printf("%d: all servers shutdown", gproc.Pid())
 }
 
 // Wait blocks to wait for all servers done.
@@ -338,7 +339,7 @@ func Wait() {
 		}
 		return true
 	})
-	glog.Printf("[ghttp] %d: all servers shutdown", gproc.Pid())
+	glog.Printf("%d: all servers shutdown", gproc.Pid())
 }
 
 // startServer starts the underlying server listening.
@@ -351,7 +352,7 @@ func (s *Server) startServer(fdMap listenerFdMap) {
 				s.config.HTTPSAddr = s.config.Address
 				s.config.Address = ""
 			} else {
-				s.config.HTTPSAddr = gDEFAULT_HTTPS_ADDR
+				s.config.HTTPSAddr = defaultHttpsAddr
 			}
 		}
 		httpsEnabled = len(s.config.HTTPSAddr) > 0
@@ -386,7 +387,7 @@ func (s *Server) startServer(fdMap listenerFdMap) {
 	}
 	// HTTP
 	if !httpsEnabled && len(s.config.Address) == 0 {
-		s.config.Address = gDEFAULT_HTTP_ADDR
+		s.config.Address = defaultHttpAddr
 	}
 	var array []string
 	if v, ok := fdMap["http"]; ok && len(v) > 0 {
@@ -445,15 +446,15 @@ func (s *Server) startServer(fdMap listenerFdMap) {
 // Status retrieves and returns the server status.
 func (s *Server) Status() int {
 	if serverRunning.Val() == 0 {
-		return SERVER_STATUS_STOPPED
+		return ServerStatusStopped
 	}
 	// If any underlying server is running, the server status is running.
 	for _, v := range s.servers {
-		if v.status == SERVER_STATUS_RUNNING {
-			return SERVER_STATUS_RUNNING
+		if v.status == ServerStatusRunning {
+			return ServerStatusRunning
 		}
 	}
-	return SERVER_STATUS_STOPPED
+	return ServerStatusStopped
 }
 
 // getListenerFdMap retrieves and returns the socket file descriptors.
@@ -485,9 +486,9 @@ func (s *Server) getListenerFdMap() map[string]string {
 // Deprecated.
 func IsExitError(err interface{}) bool {
 	errStr := gconv.String(err)
-	if strings.EqualFold(errStr, gEXCEPTION_EXIT) ||
-		strings.EqualFold(errStr, gEXCEPTION_EXIT_ALL) ||
-		strings.EqualFold(errStr, gEXCEPTION_EXIT_HOOK) {
+	if strings.EqualFold(errStr, exceptionExit) ||
+		strings.EqualFold(errStr, exceptionExitAll) ||
+		strings.EqualFold(errStr, exceptionExitHook) {
 		return true
 	}
 	return false

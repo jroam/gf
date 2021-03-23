@@ -1,4 +1,4 @@
-// Copyright 2019 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -7,8 +7,8 @@
 package gsession
 
 import (
-	"fmt"
 	"github.com/gogf/gf/container/gmap"
+	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/internal/intlog"
 	"github.com/gogf/gf/internal/json"
 	"os"
@@ -47,15 +47,15 @@ func NewStorageFile(path ...string) *StorageFile {
 	if len(path) > 0 && path[0] != "" {
 		storagePath, _ = gfile.Search(path[0])
 		if storagePath == "" {
-			panic(fmt.Sprintf("'%s' does not exist", path[0]))
+			panic(gerror.Newf("'%s' does not exist", path[0]))
 		}
 		if !gfile.IsWritable(storagePath) {
-			panic(fmt.Sprintf("'%s' is not writable", path[0]))
+			panic(gerror.Newf("'%s' is not writable", path[0]))
 		}
 	}
 	if storagePath != "" {
 		if err := gfile.Mkdir(storagePath); err != nil {
-			panic(fmt.Sprintf("mkdir '%s' failed: %v", path[0], err))
+			panic(gerror.Wrapf(err, `Mkdir "%s" failed in PWD "%s"`, path, gfile.Pwd()))
 		}
 	}
 	s := &StorageFile{
@@ -64,22 +64,26 @@ func NewStorageFile(path ...string) *StorageFile {
 		cryptoEnabled: DefaultStorageFileCryptoEnabled,
 		updatingIdSet: gset.NewStrSet(true),
 	}
-	// Batch updates the TTL for session ids timely.
-	gtimer.AddSingleton(DefaultStorageFileLoopInterval, func() {
-		//intlog.Print("StorageFile.timer start")
-		var id string
-		var err error
-		for {
-			if id = s.updatingIdSet.Pop(); id == "" {
-				break
-			}
-			if err = s.doUpdateTTL(id); err != nil {
-				intlog.Error(err)
-			}
-		}
-		//intlog.Print("StorageFile.timer end")
-	})
+
+	gtimer.AddSingleton(DefaultStorageFileLoopInterval, s.updateSessionTimely)
 	return s
+}
+
+// updateSessionTimely batch updates the TTL for sessions timely.
+func (s *StorageFile) updateSessionTimely() {
+	var (
+		id  string
+		err error
+	)
+	// Batch updating sessions.
+	for {
+		if id = s.updatingIdSet.Pop(); id == "" {
+			break
+		}
+		if err = s.updateSessionTTl(id); err != nil {
+			intlog.Error(err)
+		}
+	}
 }
 
 // SetCryptoKey sets the crypto key for session storage.
@@ -220,15 +224,15 @@ func (s *StorageFile) SetSession(id string, data *gmap.StrAnyMap, ttl time.Durat
 // It just adds the session id to the async handling queue.
 func (s *StorageFile) UpdateTTL(id string, ttl time.Duration) error {
 	intlog.Printf("StorageFile.UpdateTTL: %s, %v", id, ttl)
-	if ttl >= DefaultStorageRedisLoopInterval {
+	if ttl >= DefaultStorageFileLoopInterval {
 		s.updatingIdSet.Add(id)
 	}
 	return nil
 }
 
-// doUpdateTTL updates the TTL for session id.
-func (s *StorageFile) doUpdateTTL(id string) error {
-	intlog.Printf("StorageFile.doUpdateTTL: %s", id)
+// updateSessionTTL updates the TTL for specified session id.
+func (s *StorageFile) updateSessionTTl(id string) error {
+	intlog.Printf("StorageFile.updateSession: %s", id)
 	path := s.sessionFilePath(id)
 	file, err := gfile.OpenWithFlag(path, os.O_WRONLY)
 	if err != nil {

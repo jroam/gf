@@ -1,4 +1,4 @@
-// Copyright 2019 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -59,7 +59,7 @@ func Get(name string, def ...interface{}) interface{} {
 	return nil
 }
 
-// Get retrieves and returns the build-in binary variable of given name as gvar.Var.
+// GetVar retrieves and returns the build-in binary variable of given name as gvar.Var.
 func GetVar(name string, def ...interface{}) *gvar.Var {
 	return gvar.New(Get(name, def...))
 }

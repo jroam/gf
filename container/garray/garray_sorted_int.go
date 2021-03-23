@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -496,7 +496,7 @@ func (a *SortedIntArray) Clone() (newArray *SortedIntArray) {
 	array := make([]int, len(a.array))
 	copy(array, a.array)
 	a.mu.RUnlock()
-	return NewSortedIntArrayFrom(array, !a.mu.IsSafe())
+	return NewSortedIntArrayFrom(array, a.mu.IsSafe())
 }
 
 // Clear deletes all items of current array.

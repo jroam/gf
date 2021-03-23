@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -35,8 +35,12 @@ func Try(try func()) (err error) {
 // It automatically calls function <catch> if any exception occurs ans passes the exception as an error.
 func TryCatch(try func(), catch ...func(exception error)) {
 	defer func() {
-		if e := recover(); e != nil && len(catch) > 0 {
-			catch[0](fmt.Errorf(`%v`, e))
+		if exception := recover(); exception != nil && len(catch) > 0 {
+			if err, ok := exception.(error); ok {
+				catch[0](err)
+			} else {
+				catch[0](fmt.Errorf(`%v`, exception))
+			}
 		}
 	}()
 	try()
@@ -68,15 +72,14 @@ func Keys(mapOrStruct interface{}) (keysOrAttrs []string) {
 		reflectValue = reflect.ValueOf(mapOrStruct)
 	}
 	reflectKind = reflectValue.Kind()
-	if reflectKind == reflect.Ptr {
+	for reflectKind == reflect.Ptr {
 		if !reflectValue.IsValid() || reflectValue.IsNil() {
 			reflectValue = reflect.New(reflectValue.Type().Elem()).Elem()
 			reflectKind = reflectValue.Kind()
+		} else {
+			reflectValue = reflectValue.Elem()
+			reflectKind = reflectValue.Kind()
 		}
-	}
-	for reflectKind == reflect.Ptr {
-		reflectValue = reflectValue.Elem()
-		reflectKind = reflectValue.Kind()
 	}
 	switch reflectKind {
 	case reflect.Map:

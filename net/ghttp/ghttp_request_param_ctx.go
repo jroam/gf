@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -24,6 +24,11 @@ func (r *Request) Context() context.Context {
 // GetCtx retrieves and returns the request's context.
 func (r *Request) GetCtx() context.Context {
 	return r.Context()
+}
+
+// SetCtx custom context for current request.
+func (r *Request) SetCtx(ctx context.Context) {
+	r.context = ctx
 }
 
 // GetCtxVar retrieves and returns a Var with given key name.

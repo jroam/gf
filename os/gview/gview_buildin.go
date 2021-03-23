@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -8,6 +8,7 @@ package gview
 
 import (
 	"fmt"
+	"github.com/gogf/gf/internal/json"
 	"github.com/gogf/gf/util/gutil"
 	"strings"
 
@@ -50,11 +51,11 @@ func (view *View) buildInFuncMaps(value ...interface{}) []map[string]interface{}
 func (view *View) buildInFuncEq(value interface{}, others ...interface{}) bool {
 	s := gconv.String(value)
 	for _, v := range others {
-		if strings.Compare(s, gconv.String(v)) != 0 {
-			return false
+		if strings.Compare(s, gconv.String(v)) == 0 {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // buildInFuncNe implements build-in template function: ne
@@ -214,4 +215,11 @@ func (view *View) buildInFuncToLower(str interface{}) string {
 // buildInFuncNl2Br implements build-in template function: nl2br
 func (view *View) buildInFuncNl2Br(str interface{}) string {
 	return gstr.Nl2Br(gconv.String(str))
+}
+
+// buildInFuncJson implements build-in template function: json ,
+// which encodes and returns <value> as JSON string.
+func (view *View) buildInFuncJson(value interface{}) (string, error) {
+	b, err := json.Marshal(value)
+	return gconv.UnsafeBytesToStr(b), err
 }

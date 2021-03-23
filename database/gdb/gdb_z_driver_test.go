@@ -1,4 +1,4 @@
-// Copyright 2019 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -56,8 +56,8 @@ func Test_Custom_Driver(t *testing.T) {
 	gdb.AddConfigNode("driver-test", gdb.ConfigNode{
 		Host:    "127.0.0.1",
 		Port:    "3306",
-		User:    USER,
-		Pass:    PASS,
+		User:    TestDbUser,
+		Pass:    TestDbPass,
 		Name:    "test",
 		Type:    customDriverName,
 		Role:    "master",
@@ -67,7 +67,7 @@ func Test_Custom_Driver(t *testing.T) {
 		t.Assert(latestSqlString.Val(), "")
 		sqlString := "select 10000"
 		value, err := g.DB("driver-test").GetValue(sqlString)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(value, 10000)
 		t.Assert(latestSqlString.Val(), sqlString)
 	})

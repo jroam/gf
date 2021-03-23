@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -67,7 +67,7 @@ func (p *Process) Start() (int, error) {
 	if p.Process != nil {
 		return p.Pid(), nil
 	}
-	p.Env = append(p.Env, fmt.Sprintf("%s=%d", gPROC_ENV_KEY_PPID_KEY, p.PPid))
+	p.Env = append(p.Env, fmt.Sprintf("%s=%d", envKeyPPid, p.PPid))
 	if err := p.Cmd.Start(); err == nil {
 		if p.Manager != nil {
 			p.Manager.processes.Set(p.Process.Pid, p)

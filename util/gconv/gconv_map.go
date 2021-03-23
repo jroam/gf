@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -141,30 +141,30 @@ func doMapConvert(value interface{}, recursive bool, tags ...string) map[string]
 
 	default:
 		// Not a common type, it then uses reflection for conversion.
-		var rv reflect.Value
+		var reflectValue reflect.Value
 		if v, ok := value.(reflect.Value); ok {
-			rv = v
+			reflectValue = v
 		} else {
-			rv = reflect.ValueOf(value)
+			reflectValue = reflect.ValueOf(value)
 		}
-		kind := rv.Kind()
+		reflectKind := reflectValue.Kind()
 		// If it is a pointer, we should find its real data type.
-		if kind == reflect.Ptr {
-			rv = rv.Elem()
-			kind = rv.Kind()
+		for reflectKind == reflect.Ptr {
+			reflectValue = reflectValue.Elem()
+			reflectKind = reflectValue.Kind()
 		}
-		switch kind {
+		switch reflectKind {
 		// If <value> is type of array, it converts the value of even number index as its key and
 		// the value of odd number index as its corresponding value, for example:
 		// []string{"k1","v1","k2","v2"} => map[string]interface{}{"k1":"v1", "k2":"v2"}
 		// []string{"k1","v1","k2"}      => map[string]interface{}{"k1":"v1", "k2":nil}
 		case reflect.Slice, reflect.Array:
-			length := rv.Len()
+			length := reflectValue.Len()
 			for i := 0; i < length; i += 2 {
 				if i+1 < length {
-					dataMap[String(rv.Index(i).Interface())] = rv.Index(i + 1).Interface()
+					dataMap[String(reflectValue.Index(i).Interface())] = reflectValue.Index(i + 1).Interface()
 				} else {
-					dataMap[String(rv.Index(i).Interface())] = nil
+					dataMap[String(reflectValue.Index(i).Interface())] = nil
 				}
 			}
 		case reflect.Map, reflect.Struct:
@@ -184,29 +184,29 @@ func doMapConvertForMapOrStructValue(isRoot bool, value interface{}, recursive b
 	if isRoot == false && recursive == false {
 		return value
 	}
-	var rv reflect.Value
+	var reflectValue reflect.Value
 	if v, ok := value.(reflect.Value); ok {
-		rv = v
+		reflectValue = v
 		value = v.Interface()
 	} else {
-		rv = reflect.ValueOf(value)
+		reflectValue = reflect.ValueOf(value)
 	}
-	kind := rv.Kind()
+	reflectKind := reflectValue.Kind()
 	// If it is a pointer, we should find its real data type.
-	for kind == reflect.Ptr {
-		rv = rv.Elem()
-		kind = rv.Kind()
+	for reflectKind == reflect.Ptr {
+		reflectValue = reflectValue.Elem()
+		reflectKind = reflectValue.Kind()
 	}
-	switch kind {
+	switch reflectKind {
 	case reflect.Map:
 		var (
-			mapKeys = rv.MapKeys()
+			mapKeys = reflectValue.MapKeys()
 			dataMap = make(map[string]interface{})
 		)
 		for _, k := range mapKeys {
 			dataMap[String(k.Interface())] = doMapConvertForMapOrStructValue(
 				false,
-				rv.MapIndex(k).Interface(),
+				reflectValue.MapIndex(k).Interface(),
 				recursive,
 				tags...,
 			)
@@ -228,46 +228,46 @@ func doMapConvertForMapOrStructValue(isRoot bool, value interface{}, recursive b
 		}
 		// Using reflect for converting.
 		var (
-			rtField reflect.StructField
-			rvField reflect.Value
-			dataMap = make(map[string]interface{}) // result map.
-			rt      = rv.Type()                    // attribute value type.
-			name    = ""                           // name may be the tag name or the struct attribute name.
+			rtField     reflect.StructField
+			rvField     reflect.Value
+			dataMap     = make(map[string]interface{}) // result map.
+			reflectType = reflectValue.Type()          // attribute value type.
+			mapKey      = ""                           // mapKey may be the tag name or the struct attribute name.
 		)
-		for i := 0; i < rv.NumField(); i++ {
-			rtField = rt.Field(i)
-			rvField = rv.Field(i)
+		for i := 0; i < reflectValue.NumField(); i++ {
+			rtField = reflectType.Field(i)
+			rvField = reflectValue.Field(i)
 			// Only convert the public attributes.
 			fieldName := rtField.Name
 			if !utils.IsLetterUpper(fieldName[0]) {
 				continue
 			}
-			name = ""
+			mapKey = ""
 			fieldTag := rtField.Tag
 			for _, tag := range tags {
-				if name = fieldTag.Get(tag); name != "" {
+				if mapKey = fieldTag.Get(tag); mapKey != "" {
 					break
 				}
 			}
-			if name == "" {
-				name = fieldName
+			if mapKey == "" {
+				mapKey = fieldName
 			} else {
 				// Support json tag feature: -, omitempty
-				name = strings.TrimSpace(name)
-				if name == "-" {
+				mapKey = strings.TrimSpace(mapKey)
+				if mapKey == "-" {
 					continue
 				}
-				array := strings.Split(name, ",")
+				array := strings.Split(mapKey, ",")
 				if len(array) > 1 {
 					switch strings.TrimSpace(array[1]) {
 					case "omitempty":
 						if empty.IsEmpty(rvField.Interface()) {
 							continue
 						} else {
-							name = strings.TrimSpace(array[0])
+							mapKey = strings.TrimSpace(array[0])
 						}
 					default:
-						name = strings.TrimSpace(array[0])
+						mapKey = strings.TrimSpace(array[0])
 					}
 				}
 			}
@@ -284,7 +284,7 @@ func doMapConvertForMapOrStructValue(isRoot bool, value interface{}, recursive b
 				switch rvAttrKind {
 				case reflect.Struct:
 					var (
-						hasNoTag        = name == fieldName
+						hasNoTag        = mapKey == fieldName
 						rvAttrInterface = rvAttrField.Interface()
 					)
 					if hasNoTag && rtField.Anonymous {
@@ -296,41 +296,41 @@ func doMapConvertForMapOrStructValue(isRoot bool, value interface{}, recursive b
 								dataMap[k] = v
 							}
 						} else {
-							dataMap[name] = rvAttrInterface
+							dataMap[mapKey] = rvAttrInterface
 						}
 					} else if !hasNoTag && rtField.Anonymous {
 						// It means this attribute field has desired tag.
-						dataMap[name] = doMapConvertForMapOrStructValue(false, rvAttrInterface, true, tags...)
+						dataMap[mapKey] = doMapConvertForMapOrStructValue(false, rvAttrInterface, true, tags...)
 					} else {
-						dataMap[name] = doMapConvertForMapOrStructValue(false, rvAttrInterface, false, tags...)
+						dataMap[mapKey] = doMapConvertForMapOrStructValue(false, rvAttrInterface, false, tags...)
 					}
 
 				// The struct attribute is type of slice.
 				case reflect.Array, reflect.Slice:
 					length := rvField.Len()
 					if length == 0 {
-						dataMap[name] = rvField.Interface()
+						dataMap[mapKey] = rvField.Interface()
 						break
 					}
 					array := make([]interface{}, length)
 					for i := 0; i < length; i++ {
 						array[i] = doMapConvertForMapOrStructValue(false, rvField.Index(i), recursive, tags...)
 					}
-					dataMap[name] = array
+					dataMap[mapKey] = array
 
 				default:
 					if rvField.IsValid() {
-						dataMap[name] = rv.Field(i).Interface()
+						dataMap[mapKey] = reflectValue.Field(i).Interface()
 					} else {
-						dataMap[name] = nil
+						dataMap[mapKey] = nil
 					}
 				}
 			} else {
 				// No recursive map value converting
 				if rvField.IsValid() {
-					dataMap[name] = rv.Field(i).Interface()
+					dataMap[mapKey] = reflectValue.Field(i).Interface()
 				} else {
-					dataMap[name] = nil
+					dataMap[mapKey] = nil
 				}
 			}
 		}
@@ -341,13 +341,13 @@ func doMapConvertForMapOrStructValue(isRoot bool, value interface{}, recursive b
 
 	// The given value is type of slice.
 	case reflect.Array, reflect.Slice:
-		length := rv.Len()
+		length := reflectValue.Len()
 		if length == 0 {
 			break
 		}
-		array := make([]interface{}, rv.Len())
+		array := make([]interface{}, reflectValue.Len())
 		for i := 0; i < length; i++ {
-			array[i] = doMapConvertForMapOrStructValue(false, rv.Index(i), recursive, tags...)
+			array[i] = doMapConvertForMapOrStructValue(false, reflectValue.Index(i), recursive, tags...)
 		}
 		return array
 	}
@@ -444,8 +444,12 @@ func doMapToMap(params interface{}, pointer interface{}, mapping ...map[string]s
 	}
 	defer func() {
 		// Catch the panic, especially the reflect operation panics.
-		if e := recover(); e != nil {
-			err = gerror.NewfSkip(1, "%v", e)
+		if exception := recover(); exception != nil {
+			if e, ok := exception.(errorStack); ok {
+				err = e
+			} else {
+				err = gerror.NewSkipf(1, "%v", exception)
+			}
 		}
 	}()
 	var (
@@ -544,8 +548,12 @@ func doMapToMaps(params interface{}, pointer interface{}, mapping ...map[string]
 	}
 	defer func() {
 		// Catch the panic, especially the reflect operation panics.
-		if e := recover(); e != nil {
-			err = gerror.NewfSkip(1, "%v", e)
+		if exception := recover(); exception != nil {
+			if e, ok := exception.(errorStack); ok {
+				err = e
+			} else {
+				err = gerror.NewSkipf(1, "%v", exception)
+			}
 		}
 	}()
 	var (

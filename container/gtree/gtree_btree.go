@@ -1,4 +1,4 @@
-// Copyright 2019 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -68,7 +68,7 @@ func NewBTreeFrom(m int, comparator func(v1, v2 interface{}) int, data map[inter
 
 // Clone returns a new tree with a copy of current tree.
 func (tree *BTree) Clone() *BTree {
-	newTree := NewBTree(tree.m, tree.comparator, !tree.mu.IsSafe())
+	newTree := NewBTree(tree.m, tree.comparator, tree.mu.IsSafe())
 	newTree.Sets(tree.Map())
 	return newTree
 }

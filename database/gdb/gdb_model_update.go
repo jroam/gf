@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -8,7 +8,6 @@ package gdb
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/os/gtime"
@@ -20,7 +19,7 @@ import (
 
 // Update does "UPDATE ... " statement for the model.
 //
-// If the optional parameter <dataAndWhere> is given, the dataAndWhere[0] is the updated data field,
+// If the optional parameter `dataAndWhere` is given, the dataAndWhere[0] is the updated data field,
 // and dataAndWhere[1:] is treated as where condition fields.
 // Also see Model.Data and Model.Where functions.
 func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err error) {
@@ -39,7 +38,7 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 		}
 	}()
 	if m.data == nil {
-		return nil, errors.New("updating table with empty data")
+		return nil, gerror.New("updating table with empty data")
 	}
 	var (
 		updateData                                    = m.data

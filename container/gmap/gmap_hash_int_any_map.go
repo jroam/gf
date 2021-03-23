@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with gm file,
@@ -56,7 +56,7 @@ func (m *IntAnyMap) Iterator(f func(k int, v interface{}) bool) {
 
 // Clone returns a new hash map with copy of current map data.
 func (m *IntAnyMap) Clone() *IntAnyMap {
-	return NewIntAnyMapFrom(m.MapCopy(), !m.mu.IsSafe())
+	return NewIntAnyMapFrom(m.MapCopy(), m.mu.IsSafe())
 }
 
 // Map returns the underlying data map.

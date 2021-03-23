@@ -1,4 +1,4 @@
-// Copyright 2019 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -7,10 +7,8 @@
 package gredis
 
 import (
-	"github.com/gogf/gf/internal/intlog"
-	"time"
-
 	"github.com/gogf/gf/errors/gerror"
+	"github.com/gogf/gf/internal/intlog"
 
 	"github.com/gogf/gf/container/gmap"
 	"github.com/gogf/gf/text/gregex"
@@ -19,8 +17,8 @@ import (
 )
 
 const (
-	DEFAULT_GROUP_NAME = "default" // Default configuration group name.
-	DEFAULT_REDIS_PORT = 6379      // Default redis port configuration if not passed.
+	DefaultGroupName = "default" // Default configuration group name.
+	DefaultRedisPort = 6379      // Default redis port configuration if not passed.
 )
 
 var (
@@ -30,8 +28,8 @@ var (
 
 // SetConfig sets the global configuration for specified group.
 // If <name> is not passed, it sets configuration for the default group name.
-func SetConfig(config Config, name ...string) {
-	group := DEFAULT_GROUP_NAME
+func SetConfig(config *Config, name ...string) {
+	group := DefaultGroupName
 	if len(name) > 0 {
 		group = name[0]
 	}
@@ -44,7 +42,7 @@ func SetConfig(config Config, name ...string) {
 // SetConfigByStr sets the global configuration for specified group with string.
 // If <name> is not passed, it sets configuration for the default group name.
 func SetConfigByStr(str string, name ...string) error {
-	group := DEFAULT_GROUP_NAME
+	group := DefaultGroupName
 	if len(name) > 0 {
 		group = name[0]
 	}
@@ -59,21 +57,21 @@ func SetConfigByStr(str string, name ...string) error {
 
 // GetConfig returns the global configuration with specified group name.
 // If <name> is not passed, it returns configuration of the default group name.
-func GetConfig(name ...string) (config Config, ok bool) {
-	group := DEFAULT_GROUP_NAME
+func GetConfig(name ...string) (config *Config, ok bool) {
+	group := DefaultGroupName
 	if len(name) > 0 {
 		group = name[0]
 	}
 	if v := configs.Get(group); v != nil {
-		return v.(Config), true
+		return v.(*Config), true
 	}
-	return Config{}, false
+	return &Config{}, false
 }
 
 // RemoveConfig removes the global configuration with specified group.
 // If <name> is not passed, it removes configuration of the default group name.
 func RemoveConfig(name ...string) {
-	group := DEFAULT_GROUP_NAME
+	group := DefaultGroupName
 	if len(name) > 0 {
 		group = name[0]
 	}
@@ -85,49 +83,34 @@ func RemoveConfig(name ...string) {
 
 // ConfigFromStr parses and returns config from given str.
 // Eg: host:port[,db,pass?maxIdle=x&maxActive=x&idleTimeout=x&maxConnLifetime=x]
-func ConfigFromStr(str string) (config Config, err error) {
-	array, _ := gregex.MatchString(`([^:]+):*(\d*),{0,1}(\d*),{0,1}(.*)\?(.+)`, str)
+func ConfigFromStr(str string) (config *Config, err error) {
+	array, _ := gregex.MatchString(`^([^:]+):*(\d*),{0,1}(\d*),{0,1}(.*)\?(.+)$`, str)
 	if len(array) == 6 {
 		parse, _ := gstr.Parse(array[5])
-		config = Config{
+		config = &Config{
 			Host: array[1],
 			Port: gconv.Int(array[2]),
 			Db:   gconv.Int(array[3]),
 			Pass: array[4],
 		}
 		if config.Port == 0 {
-			config.Port = DEFAULT_REDIS_PORT
+			config.Port = DefaultRedisPort
 		}
-		if v, ok := parse["maxIdle"]; ok {
-			config.MaxIdle = gconv.Int(v)
-		}
-		if v, ok := parse["maxActive"]; ok {
-			config.MaxActive = gconv.Int(v)
-		}
-		if v, ok := parse["idleTimeout"]; ok {
-			config.IdleTimeout = gconv.Duration(v) * time.Second
-		}
-		if v, ok := parse["maxConnLifetime"]; ok {
-			config.MaxConnLifetime = gconv.Duration(v) * time.Second
-		}
-		if v, ok := parse["tls"]; ok {
-			config.TLS = gconv.Bool(v)
-		}
-		if v, ok := parse["skipVerify"]; ok {
-			config.TLSSkipVerify = gconv.Bool(v)
+		if err = gconv.Struct(parse, config); err != nil {
+			return nil, err
 		}
 		return
 	}
 	array, _ = gregex.MatchString(`([^:]+):*(\d*),{0,1}(\d*),{0,1}(.*)`, str)
 	if len(array) == 5 {
-		config = Config{
+		config = &Config{
 			Host: array[1],
 			Port: gconv.Int(array[2]),
 			Db:   gconv.Int(array[3]),
 			Pass: array[4],
 		}
 		if config.Port == 0 {
-			config.Port = DEFAULT_REDIS_PORT
+			config.Port = DefaultRedisPort
 		}
 	} else {
 		err = gerror.Newf(`invalid redis configuration: "%s"`, str)
