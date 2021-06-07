@@ -8,6 +8,7 @@ package gvalid
 
 import (
 	"errors"
+	"github.com/gogf/gf/container/garray"
 	"strconv"
 	"strings"
 	"time"
@@ -409,7 +410,7 @@ func (v *Validator) doCheckBuildInRules(
 
 	// Email.
 	case "email":
-		match = gregex.IsMatchString(`^[a-zA-Z0-9_\-\.]+@[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)+$`, valueStr)
+		match = checkEmail(valueStr)
 
 	// URL
 	case "url":
@@ -439,4 +440,21 @@ func (v *Validator) doCheckBuildInRules(
 		return match, errors.New("Invalid rule name: " + ruleKey)
 	}
 	return match, nil
+}
+
+func checkEmail(valueStr string) bool {
+	flag := gregex.IsMatchString(`^[a-zA-Z0-9_\-\.]+@[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)+$`, valueStr)
+	if !flag {
+		return false
+	}
+
+	// check suffixes
+	domainNames := []string{"nl", "center", "design", "law", "fund", "cool", "plus", "host", "wiki", "press", "company", "chat", "luxe", "work", "today", "run", "zone", "city", "me", "ca", "io", "kr", "in", "es", "br", "be", "it", "za", "de", "au", "pw", "us", "fr", "ag", "am", "mx", "jp", "ws", "tv", "uk", "ru", "com", "cn", "xyz", "vip", "top", "icu", "shop", "club", "cc", "ltd", "site", "ink", "pub ", "co", "cloud", "ren", "team", "gold", "asia", "fit", "biz", "art", "love", "online", "info", "wang", "fans", "store", "red", "mobi", "kim", "com.cn", "net.cn", "gov.cn", "org", "link", "tech", "pro", "xin"}
+	suffixes := garray.NewStrArrayFrom(domainNames)
+	eSplits := strings.Split(valueStr, ".")
+	last := eSplits[len(eSplits)-1]
+	if !suffixes.Contains(last) {
+		return false
+	}
+	return true
 }
