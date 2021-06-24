@@ -123,7 +123,7 @@ func (a *Array) Set(index int, value interface{}) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if index < 0 || index >= len(a.array) {
-		return errors.New(fmt.Sprintf("index %d out of array range %d", index, len(a.array)))
+		return fmt.Errorf("index %d out of array range %d", index, len(a.array))
 	}
 	a.array[index] = value
 	return nil
