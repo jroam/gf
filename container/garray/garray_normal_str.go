@@ -137,10 +137,7 @@ func (a *StrArray) Sort(reverse ...bool) *StrArray {
 	defer a.mu.Unlock()
 	if len(reverse) > 0 && reverse[0] {
 		sort.Slice(a.array, func(i, j int) bool {
-			if strings.Compare(a.array[i], a.array[j]) < 0 {
-				return false
-			}
-			return true
+			return strings.Compare(a.array[i], a.array[j]) >= 0
 		})
 	} else {
 		sort.Strings(a.array)
