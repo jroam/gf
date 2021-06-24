@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-func Test_Model_Inherit_Insert(t *testing.T) {
+func Test_Model_Embedded_Insert(t *testing.T) {
 	table := createTable()
 	defer dropTable(table)
 
@@ -31,7 +31,7 @@ func Test_Model_Inherit_Insert(t *testing.T) {
 			Password string `json:"password"`
 			Nickname string `json:"nickname"`
 		}
-		result, err := db.Model(table).Filter().Data(User{
+		result, err := db.Model(table).Data(User{
 			Passport: "john-test",
 			Password: "123456",
 			Nickname: "John",
@@ -50,7 +50,7 @@ func Test_Model_Inherit_Insert(t *testing.T) {
 	})
 }
 
-func Test_Model_Inherit_MapToStruct(t *testing.T) {
+func Test_Model_Embedded_MapToStruct(t *testing.T) {
 	table := createTable()
 	defer dropTable(table)
 
@@ -77,7 +77,7 @@ func Test_Model_Inherit_MapToStruct(t *testing.T) {
 			"nickname":    "T1",
 			"create_time": gtime.Now().String(),
 		}
-		result, err := db.Model(table).Filter().Data(data).Insert()
+		result, err := db.Model(table).Data(data).Insert()
 		t.AssertNil(err)
 		n, _ := result.RowsAffected()
 		t.Assert(n, 1)
@@ -121,7 +121,7 @@ func Test_Struct_Pointer_Attribute(t *testing.T) {
 	})
 	gtest.C(t, func(t *gtest.T) {
 		user := new(User)
-		err := db.Model(table).Struct(user, "id=1")
+		err := db.Model(table).Scan(user, "id=1")
 		t.AssertNil(err)
 		t.Assert(*user.Id, 1)
 		t.Assert(*user.Passport, "user_1")
@@ -130,7 +130,7 @@ func Test_Struct_Pointer_Attribute(t *testing.T) {
 	})
 	gtest.C(t, func(t *gtest.T) {
 		var user *User
-		err := db.Model(table).Struct(&user, "id=1")
+		err := db.Model(table).Scan(&user, "id=1")
 		t.AssertNil(err)
 		t.Assert(*user.Id, 1)
 		t.Assert(*user.Passport, "user_1")
@@ -201,7 +201,7 @@ func Test_Structs_Pointer_Attribute(t *testing.T) {
 	// Structs
 	gtest.C(t, func(t *gtest.T) {
 		users := make([]User, 0)
-		err := db.Model(table).Structs(&users, "id < 3")
+		err := db.Model(table).Scan(&users, "id < 3")
 		t.AssertNil(err)
 		t.Assert(len(users), 2)
 		t.Assert(*users[0].Id, 1)
@@ -211,7 +211,7 @@ func Test_Structs_Pointer_Attribute(t *testing.T) {
 	})
 	gtest.C(t, func(t *gtest.T) {
 		users := make([]*User, 0)
-		err := db.Model(table).Structs(&users, "id < 3")
+		err := db.Model(table).Scan(&users, "id < 3")
 		t.AssertNil(err)
 		t.Assert(len(users), 2)
 		t.Assert(*users[0].Id, 1)
@@ -221,7 +221,7 @@ func Test_Structs_Pointer_Attribute(t *testing.T) {
 	})
 	gtest.C(t, func(t *gtest.T) {
 		var users []User
-		err := db.Model(table).Structs(&users, "id < 3")
+		err := db.Model(table).Scan(&users, "id < 3")
 		t.AssertNil(err)
 		t.Assert(len(users), 2)
 		t.Assert(*users[0].Id, 1)
@@ -231,7 +231,7 @@ func Test_Structs_Pointer_Attribute(t *testing.T) {
 	})
 	gtest.C(t, func(t *gtest.T) {
 		var users []*User
-		err := db.Model(table).Structs(&users, "id < 3")
+		err := db.Model(table).Scan(&users, "id < 3")
 		t.AssertNil(err)
 		t.Assert(len(users), 2)
 		t.Assert(*users[0].Id, 1)
@@ -254,7 +254,7 @@ func Test_Struct_Empty(t *testing.T) {
 
 	gtest.C(t, func(t *gtest.T) {
 		user := new(User)
-		err := db.Model(table).Where("id=100").Struct(user)
+		err := db.Model(table).Where("id=100").Scan(user)
 		t.Assert(err, sql.ErrNoRows)
 		t.AssertNE(user, nil)
 	})
@@ -269,7 +269,7 @@ func Test_Struct_Empty(t *testing.T) {
 
 	gtest.C(t, func(t *gtest.T) {
 		var user *User
-		err := db.Model(table).Where("id=100").Struct(&user)
+		err := db.Model(table).Where("id=100").Scan(&user)
 		t.AssertNil(err)
 		t.Assert(user, nil)
 	})
@@ -427,5 +427,52 @@ func Test_Model_Scan_UnmarshalValue(t *testing.T) {
 		t.Assert(users[9].Password, "")
 		t.Assert(users[9].Nickname, "name_10")
 		t.Assert(users[9].CreateTime.String(), CreateTime)
+	})
+}
+
+func Test_Model_Scan_Map(t *testing.T) {
+	table := createInitTable()
+	defer dropTable(table)
+
+	gtest.C(t, func(t *gtest.T) {
+		var users []*User
+		err := db.Model(table).Order("id asc").Scan(&users)
+		t.AssertNil(err)
+		t.Assert(len(users), TableSize)
+		t.Assert(users[0].Id, 1)
+		t.Assert(users[0].Passport, "user_1")
+		t.Assert(users[0].Password, "")
+		t.Assert(users[0].Nickname, "name_1")
+		t.Assert(users[0].CreateTime.String(), CreateTime)
+
+		t.Assert(users[9].Id, 10)
+		t.Assert(users[9].Passport, "user_10")
+		t.Assert(users[9].Password, "")
+		t.Assert(users[9].Nickname, "name_10")
+		t.Assert(users[9].CreateTime.String(), CreateTime)
+	})
+}
+
+func Test_Scan_AutoFilteringByStructAttributes(t *testing.T) {
+	table := createInitTable()
+	defer dropTable(table)
+
+	type User struct {
+		Id       int
+		Passport string
+	}
+	//db.SetDebug(true)
+	gtest.C(t, func(t *gtest.T) {
+		var user *User
+		err := db.Model(table).OrderAsc("id").Scan(&user)
+		t.AssertNil(err)
+		t.Assert(user.Id, 1)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		var users []User
+		err := db.Model(table).OrderAsc("id").Scan(&users)
+		t.AssertNil(err)
+		t.Assert(len(users), TableSize)
+		t.Assert(users[0].Id, 1)
 	})
 }

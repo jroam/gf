@@ -12,11 +12,13 @@
 package gdb
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"github.com/gogf/gf/errors/gerror"
 	"strconv"
 	"strings"
+
+	"github.com/gogf/gf/errors/gerror"
 
 	"github.com/gogf/gf/internal/intlog"
 	"github.com/gogf/gf/text/gstr"
@@ -40,8 +42,8 @@ func (d *DriverMssql) New(core *Core, node *ConfigNode) (DB, error) {
 // Open creates and returns a underlying sql.DB object for mssql.
 func (d *DriverMssql) Open(config *ConfigNode) (*sql.DB, error) {
 	source := ""
-	if config.LinkInfo != "" {
-		source = config.LinkInfo
+	if config.Link != "" {
+		source = config.Link
 	} else {
 		source = fmt.Sprintf(
 			"user id=%s;password=%s;server=%s;port=%s;database=%s;encrypt=disable",
@@ -56,17 +58,17 @@ func (d *DriverMssql) Open(config *ConfigNode) (*sql.DB, error) {
 	}
 }
 
-// FilteredLinkInfo retrieves and returns filtered `linkInfo` that can be using for
+// FilteredLink retrieves and returns filtered `linkInfo` that can be using for
 // logging or tracing purpose.
-func (d *DriverMssql) FilteredLinkInfo() string {
-	linkInfo := d.GetConfig().LinkInfo
+func (d *DriverMssql) FilteredLink() string {
+	linkInfo := d.GetConfig().Link
 	if linkInfo == "" {
 		return ""
 	}
 	s, _ := gregex.ReplaceString(
 		`(.+);\s*password=(.+);\s*server=(.+)`,
 		`$1;password=xxx;server=$3`,
-		d.GetConfig().LinkInfo,
+		d.GetConfig().Link,
 	)
 	return s
 }
@@ -76,8 +78,8 @@ func (d *DriverMssql) GetChars() (charLeft string, charRight string) {
 	return "\"", "\""
 }
 
-// HandleSqlBeforeCommit deals with the sql string before commits it to underlying sql driver.
-func (d *DriverMssql) HandleSqlBeforeCommit(link Link, sql string, args []interface{}) (string, []interface{}) {
+// DoCommit deals with the sql string before commits it to underlying sql driver.
+func (d *DriverMssql) DoCommit(ctx context.Context, link Link, sql string, args []interface{}) (string, []interface{}) {
 	var index int
 	// Convert place holder char '?' to string "@px".
 	str, _ := gregex.ReplaceStringFunc("\\?", sql, func(s string) string {
@@ -183,14 +185,14 @@ func (d *DriverMssql) parseSql(sql string) string {
 
 // Tables retrieves and returns the tables of current schema.
 // It's mainly used in cli tool chain for automatically generating the models.
-func (d *DriverMssql) Tables(schema ...string) (tables []string, err error) {
+func (d *DriverMssql) Tables(ctx context.Context, schema ...string) (tables []string, err error) {
 	var result Result
-	link, err := d.db.GetSlave(schema...)
+	link, err := d.SlaveLink(schema...)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err = d.db.DoGetAll(link, `SELECT NAME FROM SYSOBJECTS WHERE XTYPE='U' AND STATUS >= 0 ORDER BY NAME`)
+	result, err = d.DoGetAll(ctx, link, `SELECT NAME FROM SYSOBJECTS WHERE XTYPE='U' AND STATUS >= 0 ORDER BY NAME`)
 	if err != nil {
 		return
 	}
@@ -205,29 +207,27 @@ func (d *DriverMssql) Tables(schema ...string) (tables []string, err error) {
 // TableFields retrieves and returns the fields information of specified table of current schema.
 //
 // Also see DriverMysql.TableFields.
-func (d *DriverMssql) TableFields(link Link, table string, schema ...string) (fields map[string]*TableField, err error) {
+func (d *DriverMssql) TableFields(ctx context.Context, table string, schema ...string) (fields map[string]*TableField, err error) {
 	charL, charR := d.GetChars()
 	table = gstr.Trim(table, charL+charR)
 	if gstr.Contains(table, " ") {
 		return nil, gerror.New("function TableFields supports only single table operations")
 	}
-	checkSchema := d.db.GetSchema()
+	useSchema := d.db.GetSchema()
 	if len(schema) > 0 && schema[0] != "" {
-		checkSchema = schema[0]
+		useSchema = schema[0]
 	}
 	tableFieldsCacheKey := fmt.Sprintf(
 		`mssql_table_fields_%s_%s@group:%s`,
-		table, checkSchema, d.GetGroup(),
+		table, useSchema, d.GetGroup(),
 	)
 	v := tableFieldsMap.GetOrSetFuncLock(tableFieldsCacheKey, func() interface{} {
 		var (
-			result Result
+			result    Result
+			link, err = d.SlaveLink(useSchema)
 		)
-		if link == nil {
-			link, err = d.db.GetSlave(checkSchema)
-			if err != nil {
-				return nil
-			}
+		if err != nil {
+			return nil
 		}
 		structureSql := fmt.Sprintf(`
 SELECT 
@@ -260,7 +260,7 @@ ORDER BY a.id,a.colorder`,
 			strings.ToUpper(table),
 		)
 		structureSql, _ = gregex.ReplaceString(`[\n\r\s]+`, " ", gstr.Trim(structureSql))
-		result, err = d.db.DoGetAll(link, structureSql)
+		result, err = d.DoGetAll(ctx, link, structureSql)
 		if err != nil {
 			return nil
 		}

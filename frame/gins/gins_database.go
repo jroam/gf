@@ -54,14 +54,14 @@ func Database(name ...string) gdb.DB {
 				if exampleConfigFilePath, _ := Config().GetFilePath(exampleFileName); exampleConfigFilePath != "" {
 					panic(gerror.Wrapf(
 						err,
-						`configuration file "%s" not found, but found "%s", did you miss renaming the configuration example file?`,
+						`configuration file "%s" not found, but found "%s", did you miss renaming the example configuration file?`,
 						Config().GetFileName(),
 						exampleFileName,
 					))
 				} else {
 					panic(gerror.Wrapf(
 						err,
-						`configuration file "%s" not found, did you miss the configuration file or the file name setting?`,
+						`configuration file "%s" not found, did you miss the configuration file or the misspell the configuration file name?`,
 						Config().GetFileName(),
 					))
 				}
@@ -104,7 +104,7 @@ func Database(name ...string) gdb.DB {
 		// which is the default group configuration.
 		if node := parseDBConfigNode(configMap); node != nil {
 			cg := gdb.ConfigGroup{}
-			if node.LinkInfo != "" || node.Host != "" {
+			if node.Link != "" || node.Host != "" {
 				cg = append(cg, *node)
 			}
 
@@ -156,15 +156,19 @@ func parseDBConfigNode(value interface{}) *gdb.ConfigNode {
 	if err != nil {
 		panic(err)
 	}
-	if _, v := gutil.MapPossibleItemByKey(nodeMap, "link"); v != nil {
-		node.LinkInfo = gconv.String(v)
+	// To be compatible with old version.
+	if _, v := gutil.MapPossibleItemByKey(nodeMap, "LinkInfo"); v != nil {
+		node.Link = gconv.String(v)
+	}
+	if _, v := gutil.MapPossibleItemByKey(nodeMap, "Link"); v != nil {
+		node.Link = gconv.String(v)
 	}
 	// Parse link syntax.
-	if node.LinkInfo != "" && node.Type == "" {
-		match, _ := gregex.MatchString(`([a-z]+):(.+)`, node.LinkInfo)
+	if node.Link != "" && node.Type == "" {
+		match, _ := gregex.MatchString(`([a-z]+):(.+)`, node.Link)
 		if len(match) == 3 {
 			node.Type = gstr.Trim(match[1])
-			node.LinkInfo = gstr.Trim(match[2])
+			node.Link = gstr.Trim(match[2])
 		}
 	}
 	return node

@@ -9,12 +9,13 @@ package gdb
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
+
 	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/os/gtime"
 	"github.com/gogf/gf/text/gstr"
 	"github.com/gogf/gf/util/gconv"
 	"github.com/gogf/gf/util/gutil"
-	"reflect"
 )
 
 // Update does "UPDATE ... " statement for the model.
@@ -82,10 +83,29 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 		return nil, gerror.New("there should be WHERE condition statement for UPDATE operation")
 	}
 	return m.db.DoUpdate(
+		m.GetCtx(),
 		m.getLink(true),
 		m.tables,
 		newData,
 		conditionStr,
 		m.mergeArguments(conditionArgs)...,
 	)
+}
+
+// Increment increments a column's value by a given amount.
+// The parameter `amount` can be type of float or integer.
+func (m *Model) Increment(column string, amount interface{}) (sql.Result, error) {
+	return m.getModel().Data(column, &Counter{
+		Field: column,
+		Value: gconv.Float64(amount),
+	}).Update()
+}
+
+// Decrement decrements a column's value by a given amount.
+// The parameter `amount` can be type of float or integer.
+func (m *Model) Decrement(column string, amount interface{}) (sql.Result, error) {
+	return m.getModel().Data(column, &Counter{
+		Field: column,
+		Value: -gconv.Float64(amount),
+	}).Update()
 }

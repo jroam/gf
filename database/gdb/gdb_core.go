@@ -11,18 +11,22 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/gogf/gf/errors/gerror"
-	"github.com/gogf/gf/text/gstr"
 	"reflect"
 	"strings"
 
+	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/internal/utils"
+	"github.com/gogf/gf/text/gstr"
 
 	"github.com/gogf/gf/container/gvar"
-	"github.com/gogf/gf/os/gtime"
 	"github.com/gogf/gf/text/gregex"
 	"github.com/gogf/gf/util/gconv"
 )
+
+// GetCore returns the underlying *Core object.
+func (c *Core) GetCore() *Core {
+	return c
+}
 
 // Ctx is a chaining function, which creates and returns a new DB that is a shallow copy
 // of current DB object and with given context in it.
@@ -32,6 +36,11 @@ func (c *Core) Ctx(ctx context.Context) DB {
 	if ctx == nil {
 		return c.db
 	}
+	// It is already set context in previous chaining operation.
+	if c.ctx != nil {
+		return c.db
+	}
+	// It makes a shallow copy of current db and changes its context for next chaining operation.
 	var (
 		err        error
 		newCore    = &Core{}
@@ -39,10 +48,12 @@ func (c *Core) Ctx(ctx context.Context) DB {
 	)
 	*newCore = *c
 	newCore.ctx = ctx
+	// It creates a new DB object, which is commonly a wrapper for object `Core`.
 	newCore.db, err = driverMap[configNode.Type].New(newCore, configNode)
-	// Seldom error, just log it.
 	if err != nil {
-		c.db.GetLogger().Ctx(ctx).Error(err)
+		// It is really a serious error here.
+		// Do not let it continue.
+		panic(err)
 	}
 	return newCore.db
 }
@@ -53,13 +64,13 @@ func (c *Core) GetCtx() context.Context {
 	if c.ctx != nil {
 		return c.ctx
 	}
-	return context.Background()
+	return context.TODO()
 }
 
 // GetCtxTimeout returns the context and cancel function for specified timeout type.
 func (c *Core) GetCtxTimeout(timeoutType int, ctx context.Context) (context.Context, context.CancelFunc) {
 	if ctx == nil {
-		ctx = c.db.GetCtx()
+		ctx = c.GetCtx()
 	} else {
 		ctx = context.WithValue(ctx, "WrappedByGetCtxTimeout", nil)
 	}
@@ -84,183 +95,41 @@ func (c *Core) GetCtxTimeout(timeoutType int, ctx context.Context) (context.Cont
 
 // Master creates and returns a connection from master node if master-slave configured.
 // It returns the default connection if master-slave not configured.
-func (c *Core) Master() (*sql.DB, error) {
-	return c.getSqlDb(true, c.schema.Val())
+func (c *Core) Master(schema ...string) (*sql.DB, error) {
+	useSchema := ""
+	if len(schema) > 0 && schema[0] != "" {
+		useSchema = schema[0]
+	} else {
+		useSchema = c.schema.Val()
+	}
+	return c.getSqlDb(true, useSchema)
 }
 
 // Slave creates and returns a connection from slave node if master-slave configured.
 // It returns the default connection if master-slave not configured.
-func (c *Core) Slave() (*sql.DB, error) {
-	return c.getSqlDb(false, c.schema.Val())
-}
-
-// Query commits one query SQL to underlying driver and returns the execution result.
-// It is most commonly used for data querying.
-func (c *Core) Query(sql string, args ...interface{}) (rows *sql.Rows, err error) {
-	link, err := c.db.Slave()
-	if err != nil {
-		return nil, err
-	}
-	return c.db.DoQuery(link, sql, args...)
-}
-
-// DoQuery commits the sql string and its arguments to underlying driver
-// through given link object and returns the execution result.
-func (c *Core) DoQuery(link Link, sql string, args ...interface{}) (rows *sql.Rows, err error) {
-	sql, args = formatSql(sql, args)
-	sql, args = c.db.HandleSqlBeforeCommit(link, sql, args)
-	ctx := c.db.GetCtx()
-	if c.GetConfig().QueryTimeout > 0 {
-		ctx, _ = context.WithTimeout(ctx, c.GetConfig().QueryTimeout)
-	}
-	mTime1 := gtime.TimestampMilli()
-	rows, err = link.QueryContext(ctx, sql, args...)
-	mTime2 := gtime.TimestampMilli()
-	sqlObj := &Sql{
-		Sql:    sql,
-		Type:   "DB.QueryContext",
-		Args:   args,
-		Format: FormatSqlWithArgs(sql, args),
-		Error:  err,
-		Start:  mTime1,
-		End:    mTime2,
-		Group:  c.db.GetGroup(),
-	}
-	c.addSqlToTracing(ctx, sqlObj)
-	if c.db.GetDebug() {
-		c.writeSqlToLogger(sqlObj)
-	}
-	if err == nil {
-		return rows, nil
+func (c *Core) Slave(schema ...string) (*sql.DB, error) {
+	useSchema := ""
+	if len(schema) > 0 && schema[0] != "" {
+		useSchema = schema[0]
 	} else {
-		err = formatError(err, sql, args...)
+		useSchema = c.schema.Val()
 	}
-	return nil, err
-}
-
-// Exec commits one query SQL to underlying driver and returns the execution result.
-// It is most commonly used for data inserting and updating.
-func (c *Core) Exec(sql string, args ...interface{}) (result sql.Result, err error) {
-	link, err := c.db.Master()
-	if err != nil {
-		return nil, err
-	}
-	return c.db.DoExec(link, sql, args...)
-}
-
-// DoExec commits the sql string and its arguments to underlying driver
-// through given link object and returns the execution result.
-func (c *Core) DoExec(link Link, sql string, args ...interface{}) (result sql.Result, err error) {
-	sql, args = formatSql(sql, args)
-	sql, args = c.db.HandleSqlBeforeCommit(link, sql, args)
-	ctx := c.db.GetCtx()
-	if c.GetConfig().ExecTimeout > 0 {
-		var cancelFunc context.CancelFunc
-		ctx, cancelFunc = context.WithTimeout(ctx, c.GetConfig().ExecTimeout)
-		defer cancelFunc()
-	}
-
-	mTime1 := gtime.TimestampMilli()
-	if !c.db.GetDryRun() {
-		result, err = link.ExecContext(ctx, sql, args...)
-	} else {
-		result = new(SqlResult)
-	}
-	mTime2 := gtime.TimestampMilli()
-	sqlObj := &Sql{
-		Sql:    sql,
-		Type:   "DB.ExecContext",
-		Args:   args,
-		Format: FormatSqlWithArgs(sql, args),
-		Error:  err,
-		Start:  mTime1,
-		End:    mTime2,
-		Group:  c.db.GetGroup(),
-	}
-	c.addSqlToTracing(ctx, sqlObj)
-	if c.db.GetDebug() {
-		c.writeSqlToLogger(sqlObj)
-	}
-	return result, formatError(err, sql, args...)
-}
-
-// Prepare creates a prepared statement for later queries or executions.
-// Multiple queries or executions may be run concurrently from the
-// returned statement.
-// The caller must call the statement's Close method
-// when the statement is no longer needed.
-//
-// The parameter `execOnMaster` specifies whether executing the sql on master node,
-// or else it executes the sql on slave node if master-slave configured.
-func (c *Core) Prepare(sql string, execOnMaster ...bool) (*Stmt, error) {
-	var (
-		err  error
-		link Link
-	)
-	if len(execOnMaster) > 0 && execOnMaster[0] {
-		if link, err = c.db.Master(); err != nil {
-			return nil, err
-		}
-	} else {
-		if link, err = c.db.Slave(); err != nil {
-			return nil, err
-		}
-	}
-	return c.db.DoPrepare(link, sql)
-}
-
-// doPrepare calls prepare function on given link object and returns the statement object.
-func (c *Core) DoPrepare(link Link, sql string) (*Stmt, error) {
-	ctx := c.db.GetCtx()
-	if c.GetConfig().PrepareTimeout > 0 {
-		// DO NOT USE cancel function in prepare statement.
-		ctx, _ = context.WithTimeout(ctx, c.GetConfig().PrepareTimeout)
-	}
-	var (
-		mTime1    = gtime.TimestampMilli()
-		stmt, err = link.PrepareContext(ctx, sql)
-		mTime2    = gtime.TimestampMilli()
-		sqlObj    = &Sql{
-			Sql:    sql,
-			Type:   "DB.PrepareContext",
-			Args:   nil,
-			Format: FormatSqlWithArgs(sql, nil),
-			Error:  err,
-			Start:  mTime1,
-			End:    mTime2,
-			Group:  c.db.GetGroup(),
-		}
-	)
-	c.addSqlToTracing(ctx, sqlObj)
-	if c.db.GetDebug() {
-		c.writeSqlToLogger(sqlObj)
-	}
-	return &Stmt{
-		Stmt: stmt,
-		core: c,
-		sql:  sql,
-	}, err
+	return c.getSqlDb(false, useSchema)
 }
 
 // GetAll queries and returns data records from database.
 func (c *Core) GetAll(sql string, args ...interface{}) (Result, error) {
-	return c.db.DoGetAll(nil, sql, args...)
+	return c.db.DoGetAll(c.GetCtx(), nil, sql, args...)
 }
 
 // DoGetAll queries and returns data records from database.
-func (c *Core) DoGetAll(link Link, sql string, args ...interface{}) (result Result, err error) {
-	if link == nil {
-		link, err = c.db.Slave()
-		if err != nil {
-			return nil, err
-		}
-	}
-	rows, err := c.db.DoQuery(link, sql, args...)
+func (c *Core) DoGetAll(ctx context.Context, link Link, sql string, args ...interface{}) (result Result, err error) {
+	rows, err := c.db.DoQuery(ctx, link, sql, args...)
 	if err != nil || rows == nil {
 		return nil, err
 	}
 	defer rows.Close()
-	return c.db.convertRowsToResult(rows)
+	return c.convertRowsToResult(rows)
 }
 
 // GetOne queries and returns one record from database.
@@ -278,7 +147,7 @@ func (c *Core) GetOne(sql string, args ...interface{}) (Record, error) {
 // GetArray queries and returns data values as slice from database.
 // Note that if there are multiple columns in the result, it returns just one column values randomly.
 func (c *Core) GetArray(sql string, args ...interface{}) ([]Value, error) {
-	all, err := c.db.DoGetAll(nil, sql, args...)
+	all, err := c.db.DoGetAll(c.GetCtx(), nil, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -355,6 +224,39 @@ func (c *Core) GetCount(sql string, args ...interface{}) (int, error) {
 	return value.Int(), nil
 }
 
+// Union does "(SELECT xxx FROM xxx) UNION (SELECT xxx FROM xxx) ..." statement.
+func (c *Core) Union(unions ...*Model) *Model {
+	return c.doUnion(unionTypeNormal, unions...)
+}
+
+// UnionAll does "(SELECT xxx FROM xxx) UNION ALL (SELECT xxx FROM xxx) ..." statement.
+func (c *Core) UnionAll(unions ...*Model) *Model {
+	return c.doUnion(unionTypeAll, unions...)
+}
+
+func (c *Core) doUnion(unionType int, unions ...*Model) *Model {
+	var (
+		unionTypeStr   string
+		composedSqlStr string
+		composedArgs   = make([]interface{}, 0)
+	)
+	if unionType == unionTypeAll {
+		unionTypeStr = "UNION ALL"
+	} else {
+		unionTypeStr = "UNION"
+	}
+	for _, v := range unions {
+		sqlWithHolder, holderArgs := v.getFormattedSqlAndArgs(queryTypeNormal, false)
+		if composedSqlStr == "" {
+			composedSqlStr += fmt.Sprintf(`(%s)`, sqlWithHolder)
+		} else {
+			composedSqlStr += fmt.Sprintf(` %s (%s)`, unionTypeStr, sqlWithHolder)
+		}
+		composedArgs = append(composedArgs, holderArgs...)
+	}
+	return c.db.Raw(composedSqlStr, composedArgs...)
+}
+
 // PingMaster pings the master node to check authentication or keeps the connection alive.
 func (c *Core) PingMaster() error {
 	if master, err := c.db.Master(); err != nil {
@@ -371,65 +273,6 @@ func (c *Core) PingSlave() error {
 	} else {
 		return slave.Ping()
 	}
-}
-
-// Begin starts and returns the transaction object.
-// You should call Commit or Rollback functions of the transaction object
-// if you no longer use the transaction. Commit or Rollback functions will also
-// close the transaction automatically.
-func (c *Core) Begin() (*TX, error) {
-	if master, err := c.db.Master(); err != nil {
-		return nil, err
-	} else {
-		//ctx := c.db.GetCtx()
-		//if c.GetConfig().TranTimeout > 0 {
-		//	var cancelFunc context.CancelFunc
-		//	ctx, cancelFunc = context.WithTimeout(ctx, c.GetConfig().TranTimeout)
-		//	defer cancelFunc()
-		//}
-		if tx, err := master.Begin(); err == nil {
-			return &TX{
-				db:     c.db,
-				tx:     tx,
-				master: master,
-			}, nil
-		} else {
-			return nil, err
-		}
-	}
-}
-
-// Transaction wraps the transaction logic using function `f`.
-// It rollbacks the transaction and returns the error from function `f` if
-// it returns non-nil error. It commits the transaction and returns nil if
-// function `f` returns nil.
-//
-// Note that, you should not Commit or Rollback the transaction in function `f`
-// as it is automatically handled by this function.
-func (c *Core) Transaction(f func(tx *TX) error) (err error) {
-	var tx *TX
-	tx, err = c.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err == nil {
-			if e := recover(); e != nil {
-				err = fmt.Errorf("%v", e)
-			}
-		}
-		if err != nil {
-			if e := tx.Rollback(); e != nil {
-				err = e
-			}
-		} else {
-			if e := tx.Commit(); e != nil {
-				err = e
-			}
-		}
-	}()
-	err = f(tx)
-	return
 }
 
 // Insert does "INSERT INTO ..." statement for the table.
@@ -462,6 +305,14 @@ func (c *Core) InsertIgnore(table string, data interface{}, batch ...int) (sql.R
 		return c.Model(table).Data(data).Batch(batch[0]).InsertIgnore()
 	}
 	return c.Model(table).Data(data).InsertIgnore()
+}
+
+// InsertAndGetId performs action Insert and returns the last insert id that automatically generated.
+func (c *Core) InsertAndGetId(table string, data interface{}, batch ...int) (int64, error) {
+	if len(batch) > 0 {
+		return c.Model(table).Data(data).Batch(batch[0]).InsertAndGetId()
+	}
+	return c.Model(table).Data(data).InsertAndGetId()
 }
 
 // Replace does "REPLACE INTO ..." statement for the table.
@@ -501,7 +352,7 @@ func (c *Core) Save(table string, data interface{}, batch ...int) (sql.Result, e
 	return c.Model(table).Data(data).Save()
 }
 
-// doInsert inserts or updates data for given table.
+// DoInsert inserts or updates data for given table.
 // This function is usually used for custom interface definition, you do not need call it manually.
 // The parameter `data` can be type of map/gmap/struct/*struct/[]map/[]struct, etc.
 // Eg:
@@ -513,185 +364,15 @@ func (c *Core) Save(table string, data interface{}, batch ...int) (sql.Result, e
 // 1: replace: if there's unique/primary key in the data, it deletes it from table and inserts a new one;
 // 2: save:    if there's unique/primary key in the data, it updates it or else inserts a new one;
 // 3: ignore:  if there's unique/primary key in the data, it ignores the inserting;
-func (c *Core) DoInsert(link Link, table string, data interface{}, option int, batch ...int) (result sql.Result, err error) {
-	table = c.db.QuotePrefixTableName(table)
+func (c *Core) DoInsert(ctx context.Context, link Link, table string, list List, option DoInsertOption) (result sql.Result, err error) {
 	var (
-		fields       []string
-		values       []string
-		params       []interface{}
-		dataMap      Map
-		reflectValue = reflect.ValueOf(data)
-		reflectKind  = reflectValue.Kind()
+		keys           []string      // Field names.
+		values         []string      // Value holder string array, like: (?,?,?)
+		params         []interface{} // Values that will be committed to underlying database driver.
+		onDuplicateStr string        // onDuplicateStr is used in "ON DUPLICATE KEY UPDATE" statement.
 	)
-	if reflectKind == reflect.Ptr {
-		reflectValue = reflectValue.Elem()
-		reflectKind = reflectValue.Kind()
-	}
-	switch reflectKind {
-	case reflect.Slice, reflect.Array:
-		return c.db.DoBatchInsert(link, table, data, option, batch...)
-	case reflect.Struct:
-		if _, ok := data.(apiInterfaces); ok {
-			return c.db.DoBatchInsert(link, table, data, option, batch...)
-		} else {
-			dataMap = ConvertDataForTableRecord(data)
-		}
-	case reflect.Map:
-		dataMap = ConvertDataForTableRecord(data)
-	default:
-		return result, gerror.New(fmt.Sprint("unsupported data type:", reflectKind))
-	}
-	if len(dataMap) == 0 {
-		return nil, gerror.New("data cannot be empty")
-	}
-	var (
-		charL, charR = c.db.GetChars()
-		operation    = GetInsertOperationByOption(option)
-		updateStr    = ""
-	)
-	for k, v := range dataMap {
-		fields = append(fields, charL+k+charR)
-		if s, ok := v.(Raw); ok {
-			values = append(values, gconv.String(s))
-		} else {
-			values = append(values, "?")
-			params = append(params, v)
-		}
-	}
-	if option == insertOptionSave {
-		for k, _ := range dataMap {
-			// If it's SAVE operation,
-			// do not automatically update the creating time.
-			if c.isSoftCreatedFiledName(k) {
-				continue
-			}
-			if len(updateStr) > 0 {
-				updateStr += ","
-			}
-			updateStr += fmt.Sprintf(
-				"%s%s%s=VALUES(%s%s%s)",
-				charL, k, charR,
-				charL, k, charR,
-			)
-		}
-		updateStr = fmt.Sprintf("ON DUPLICATE KEY UPDATE %s", updateStr)
-	}
-	if link == nil {
-		if link, err = c.db.Master(); err != nil {
-			return nil, err
-		}
-	}
-	return c.db.DoExec(
-		link,
-		fmt.Sprintf(
-			"%s INTO %s(%s) VALUES(%s) %s",
-			operation, table, strings.Join(fields, ","),
-			strings.Join(values, ","), updateStr,
-		),
-		params...,
-	)
-}
-
-// BatchInsert batch inserts data.
-// The parameter `list` must be type of slice of map or struct.
-func (c *Core) BatchInsert(table string, list interface{}, batch ...int) (sql.Result, error) {
-	if len(batch) > 0 {
-		return c.Model(table).Data(list).Batch(batch[0]).Insert()
-	}
-	return c.Model(table).Data(list).Insert()
-}
-
-// BatchInsertIgnore batch inserts data with ignore option.
-// The parameter `list` must be type of slice of map or struct.
-func (c *Core) BatchInsertIgnore(table string, list interface{}, batch ...int) (sql.Result, error) {
-	if len(batch) > 0 {
-		return c.Model(table).Data(list).Batch(batch[0]).InsertIgnore()
-	}
-	return c.Model(table).Data(list).InsertIgnore()
-}
-
-// BatchReplace batch replaces data.
-// The parameter `list` must be type of slice of map or struct.
-func (c *Core) BatchReplace(table string, list interface{}, batch ...int) (sql.Result, error) {
-	if len(batch) > 0 {
-		return c.Model(table).Data(list).Batch(batch[0]).Replace()
-	}
-	return c.Model(table).Data(list).Replace()
-}
-
-// BatchSave batch replaces data.
-// The parameter `list` must be type of slice of map or struct.
-func (c *Core) BatchSave(table string, list interface{}, batch ...int) (sql.Result, error) {
-	if len(batch) > 0 {
-		return c.Model(table).Data(list).Batch(batch[0]).Save()
-	}
-	return c.Model(table).Data(list).Save()
-}
-
-// DoBatchInsert batch inserts/replaces/saves data.
-// This function is usually used for custom interface definition, you do not need call it manually.
-func (c *Core) DoBatchInsert(link Link, table string, list interface{}, option int, batch ...int) (result sql.Result, err error) {
-	table = c.db.QuotePrefixTableName(table)
-	var (
-		keys    []string      // Field names.
-		values  []string      // Value holder string array, like: (?,?,?)
-		params  []interface{} // Values that will be committed to underlying database driver.
-		listMap List          // The data list that passed from caller.
-	)
-	switch value := list.(type) {
-	case Result:
-		listMap = value.List()
-	case Record:
-		listMap = List{value.Map()}
-	case List:
-		listMap = value
-	case Map:
-		listMap = List{value}
-	default:
-		var (
-			rv   = reflect.ValueOf(list)
-			kind = rv.Kind()
-		)
-		if kind == reflect.Ptr {
-			rv = rv.Elem()
-			kind = rv.Kind()
-		}
-		switch kind {
-		// If it's slice type, it then converts it to List type.
-		case reflect.Slice, reflect.Array:
-			listMap = make(List, rv.Len())
-			for i := 0; i < rv.Len(); i++ {
-				listMap[i] = ConvertDataForTableRecord(rv.Index(i).Interface())
-			}
-		case reflect.Map:
-			listMap = List{ConvertDataForTableRecord(value)}
-		case reflect.Struct:
-			if v, ok := value.(apiInterfaces); ok {
-				var (
-					array = v.Interfaces()
-					list  = make(List, len(array))
-				)
-				for i := 0; i < len(array); i++ {
-					list[i] = ConvertDataForTableRecord(array[i])
-				}
-				listMap = list
-			} else {
-				listMap = List{ConvertDataForTableRecord(value)}
-			}
-		default:
-			return result, gerror.New(fmt.Sprint("unsupported list type:", kind))
-		}
-	}
-	if len(listMap) < 1 {
-		return result, gerror.New("data list cannot be empty")
-	}
-	if link == nil {
-		if link, err = c.db.Master(); err != nil {
-			return
-		}
-	}
 	// Handle the field names and place holders.
-	for k, _ := range listMap[0] {
+	for k, _ := range list[0] {
 		keys = append(keys, k)
 	}
 	// Prepare the batch result pointer.
@@ -699,59 +380,36 @@ func (c *Core) DoBatchInsert(link Link, table string, list interface{}, option i
 		charL, charR = c.db.GetChars()
 		batchResult  = new(SqlResult)
 		keysStr      = charL + strings.Join(keys, charR+","+charL) + charR
-		operation    = GetInsertOperationByOption(option)
-		updateStr    = ""
+		operation    = GetInsertOperationByOption(option.InsertOption)
 	)
-	if option == insertOptionSave {
-		for _, k := range keys {
-			// If it's SAVE operation,
-			// do not automatically update the creating time.
-			if c.isSoftCreatedFiledName(k) {
-				continue
-			}
-			if len(updateStr) > 0 {
-				updateStr += ","
-			}
-			updateStr += fmt.Sprintf(
-				"%s%s%s=VALUES(%s%s%s)",
-				charL, k, charR,
-				charL, k, charR,
-			)
-		}
-		updateStr = fmt.Sprintf("ON DUPLICATE KEY UPDATE %s", updateStr)
-	}
-	batchNum := defaultBatchNumber
-	if len(batch) > 0 && batch[0] > 0 {
-		batchNum = batch[0]
+	if option.InsertOption == insertOptionSave {
+		onDuplicateStr = c.formatOnDuplicate(keys, option)
 	}
 	var (
-		listMapLen  = len(listMap)
+		listLength  = len(list)
 		valueHolder = make([]string, 0)
 	)
-	for i := 0; i < listMapLen; i++ {
+	for i := 0; i < listLength; i++ {
 		values = values[:0]
 		// Note that the map type is unordered,
 		// so it should use slice+key to retrieve the value.
 		for _, k := range keys {
-			if s, ok := listMap[i][k].(Raw); ok {
+			if s, ok := list[i][k].(Raw); ok {
 				values = append(values, gconv.String(s))
 			} else {
 				values = append(values, "?")
-				params = append(params, listMap[i][k])
+				params = append(params, list[i][k])
 			}
 		}
 		valueHolder = append(valueHolder, "("+gstr.Join(values, ",")+")")
-		if len(valueHolder) == batchNum || (i == listMapLen-1 && len(valueHolder) > 0) {
-			r, err := c.db.DoExec(
-				link,
-				fmt.Sprintf(
-					"%s INTO %s(%s) VALUES%s %s",
-					operation, table, keysStr,
-					gstr.Join(valueHolder, ","),
-					updateStr,
-				),
-				params...,
-			)
+		// Batch package checks: It meets the batch number or it is the last element.
+		if len(valueHolder) == option.BatchCount || (i == listLength-1 && len(valueHolder) > 0) {
+			r, err := c.db.DoExec(ctx, link, fmt.Sprintf(
+				"%s INTO %s(%s) VALUES%s %s",
+				operation, c.QuotePrefixTableName(table), keysStr,
+				gstr.Join(valueHolder, ","),
+				onDuplicateStr,
+			), params...)
 			if err != nil {
 				return r, err
 			}
@@ -766,6 +424,52 @@ func (c *Core) DoBatchInsert(link Link, table string, list interface{}, option i
 		}
 	}
 	return batchResult, nil
+}
+
+func (c *Core) formatOnDuplicate(columns []string, option DoInsertOption) string {
+	var (
+		onDuplicateStr string
+	)
+	if option.OnDuplicateStr != "" {
+		onDuplicateStr = option.OnDuplicateStr
+	} else if len(option.OnDuplicateMap) > 0 {
+		for k, v := range option.OnDuplicateMap {
+			if len(onDuplicateStr) > 0 {
+				onDuplicateStr += ","
+			}
+			switch v.(type) {
+			case Raw, *Raw:
+				onDuplicateStr += fmt.Sprintf(
+					"%s=%s",
+					c.QuoteWord(k),
+					v,
+				)
+			default:
+				onDuplicateStr += fmt.Sprintf(
+					"%s=VALUES(%s)",
+					c.QuoteWord(k),
+					c.QuoteWord(gconv.String(v)),
+				)
+			}
+		}
+	} else {
+		for _, column := range columns {
+			// If it's SAVE operation,
+			// do not automatically update the creating time.
+			if c.isSoftCreatedFilledName(column) {
+				continue
+			}
+			if len(onDuplicateStr) > 0 {
+				onDuplicateStr += ","
+			}
+			onDuplicateStr += fmt.Sprintf(
+				"%s=VALUES(%s)",
+				c.QuoteWord(column),
+				c.QuoteWord(column),
+			)
+		}
+	}
+	return fmt.Sprintf("ON DUPLICATE KEY UPDATE %s", onDuplicateStr)
 }
 
 // Update does "UPDATE ... " statement for the table.
@@ -786,10 +490,10 @@ func (c *Core) Update(table string, data interface{}, condition interface{}, arg
 	return c.Model(table).Data(data).Where(condition, args...).Update()
 }
 
-// doUpdate does "UPDATE ... " statement for the table.
+// DoUpdate does "UPDATE ... " statement for the table.
 // This function is usually used for custom interface definition, you do not need call it manually.
-func (c *Core) DoUpdate(link Link, table string, data interface{}, condition string, args ...interface{}) (result sql.Result, err error) {
-	table = c.db.QuotePrefixTableName(table)
+func (c *Core) DoUpdate(ctx context.Context, link Link, table string, data interface{}, condition string, args ...interface{}) (result sql.Result, err error) {
+	table = c.QuotePrefixTableName(table)
 	var (
 		rv   = reflect.ValueOf(data)
 		kind = rv.Kind()
@@ -812,24 +516,29 @@ func (c *Core) DoUpdate(link Link, table string, data interface{}, condition str
 			switch value := v.(type) {
 			case *Counter:
 				if value.Value != 0 {
-					column := c.db.QuoteWord(value.Field)
+					column := k
+					if value.Field != "" {
+						column = c.QuoteWord(value.Field)
+					}
 					fields = append(fields, fmt.Sprintf("%s=%s+?", column, column))
 					params = append(params, value.Value)
 				}
 			case Counter:
 				if value.Value != 0 {
-					column := c.db.QuoteWord(value.Field)
+					column := k
+					if value.Field != "" {
+						column = c.QuoteWord(value.Field)
+					}
 					fields = append(fields, fmt.Sprintf("%s=%s+?", column, column))
 					params = append(params, value.Value)
 				}
 			default:
 				if s, ok := v.(Raw); ok {
-					fields = append(fields, c.db.QuoteWord(k)+"="+gconv.String(s))
+					fields = append(fields, c.QuoteWord(k)+"="+gconv.String(s))
 				} else {
-					fields = append(fields, c.db.QuoteWord(k)+"=?")
+					fields = append(fields, c.QuoteWord(k)+"=?")
 					params = append(params, v)
 				}
-
 			}
 		}
 		updates = strings.Join(fields, ",")
@@ -844,15 +553,11 @@ func (c *Core) DoUpdate(link Link, table string, data interface{}, condition str
 	}
 	// If no link passed, it then uses the master link.
 	if link == nil {
-		if link, err = c.db.Master(); err != nil {
+		if link, err = c.MasterLink(); err != nil {
 			return nil, err
 		}
 	}
-	return c.db.DoExec(
-		link,
-		fmt.Sprintf("UPDATE %s SET %s%s", table, updates, condition),
-		args...,
-	)
+	return c.db.DoExec(ctx, link, fmt.Sprintf("UPDATE %s SET %s%s", table, updates, condition), args...)
 }
 
 // Delete does "DELETE FROM ... " statement for the table.
@@ -872,14 +577,14 @@ func (c *Core) Delete(table string, condition interface{}, args ...interface{}) 
 
 // DoDelete does "DELETE FROM ... " statement for the table.
 // This function is usually used for custom interface definition, you do not need call it manually.
-func (c *Core) DoDelete(link Link, table string, condition string, args ...interface{}) (result sql.Result, err error) {
+func (c *Core) DoDelete(ctx context.Context, link Link, table string, condition string, args ...interface{}) (result sql.Result, err error) {
 	if link == nil {
-		if link, err = c.db.Master(); err != nil {
+		if link, err = c.MasterLink(); err != nil {
 			return nil, err
 		}
 	}
-	table = c.db.QuotePrefixTableName(table)
-	return c.db.DoExec(link, fmt.Sprintf("DELETE FROM %s%s", table, condition), args...)
+	table = c.QuotePrefixTableName(table)
+	return c.db.DoExec(ctx, link, fmt.Sprintf("DELETE FROM %s%s", table, condition), args...)
 }
 
 // convertRowsToResult converts underlying data record type sql.Rows to Result type.
@@ -900,7 +605,7 @@ func (c *Core) convertRowsToResult(rows *sql.Rows) (Result, error) {
 	}
 	var (
 		values   = make([]interface{}, len(columnNames))
-		records  = make(Result, 0)
+		result   = make(Result, 0)
 		scanArgs = make([]interface{}, len(values))
 	)
 	for i := range values {
@@ -908,22 +613,22 @@ func (c *Core) convertRowsToResult(rows *sql.Rows) (Result, error) {
 	}
 	for {
 		if err := rows.Scan(scanArgs...); err != nil {
-			return records, err
+			return result, err
 		}
-		row := make(Record)
+		record := Record{}
 		for i, value := range values {
 			if value == nil {
-				row[columnNames[i]] = gvar.New(nil)
+				record[columnNames[i]] = gvar.New(nil)
 			} else {
-				row[columnNames[i]] = gvar.New(c.db.convertFieldValueToLocalValue(value, columnTypes[i]))
+				record[columnNames[i]] = gvar.New(c.convertFieldValueToLocalValue(value, columnTypes[i]))
 			}
 		}
-		records = append(records, row)
+		result = append(result, record)
 		if !rows.Next() {
 			break
 		}
 	}
-	return records, nil
+	return result, nil
 }
 
 // MarshalJSON implements the interface MarshalJSON for json.Marshal.
@@ -937,19 +642,25 @@ func (c *Core) MarshalJSON() ([]byte, error) {
 
 // writeSqlToLogger outputs the sql object to logger.
 // It is enabled only if configuration "debug" is true.
-func (c *Core) writeSqlToLogger(v *Sql) {
-	s := fmt.Sprintf("[%3d ms] [%s] %s", v.End-v.Start, v.Group, v.Format)
-	if v.Error != nil {
-		s += "\nError: " + v.Error.Error()
-		c.logger.Ctx(c.db.GetCtx()).Error(s)
+func (c *Core) writeSqlToLogger(ctx context.Context, sql *Sql) {
+	var transactionIdStr string
+	if sql.IsTransaction {
+		if v := ctx.Value(transactionIdForLoggerCtx); v != nil {
+			transactionIdStr = fmt.Sprintf(`[%d] `, v.(uint64))
+		}
+	}
+	s := fmt.Sprintf("[%3d ms] [%s] %s%s", sql.End-sql.Start, sql.Group, transactionIdStr, sql.Format)
+	if sql.Error != nil {
+		s += "\nError: " + sql.Error.Error()
+		c.logger.Ctx(ctx).Error(s)
 	} else {
-		c.logger.Ctx(c.db.GetCtx()).Debug(s)
+		c.logger.Ctx(ctx).Debug(s)
 	}
 }
 
 // HasTable determine whether the table name exists in the database.
 func (c *Core) HasTable(name string) (bool, error) {
-	tableList, err := c.db.Tables()
+	tableList, err := c.db.Tables(c.GetCtx())
 	if err != nil {
 		return false, err
 	}
@@ -961,8 +672,8 @@ func (c *Core) HasTable(name string) (bool, error) {
 	return false, nil
 }
 
-// isSoftCreatedFiledName checks and returns whether given filed name is an automatic-filled created time.
-func (c *Core) isSoftCreatedFiledName(fieldName string) bool {
+// isSoftCreatedFilledName checks and returns whether given filed name is an automatic-filled created time.
+func (c *Core) isSoftCreatedFilledName(fieldName string) bool {
 	if fieldName == "" {
 		return false
 	}
