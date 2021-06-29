@@ -178,6 +178,7 @@ func (a *Array) InsertBefore(index int, value interface{}) error {
 	if index < 0 || index >= len(a.array) {
 		return errors.New(fmt.Sprintf("index %d out of array range %d", index, len(a.array)))
 	}
+
 	rear := append([]interface{}{}, a.array[index:]...)
 	a.array = append(a.array[0:index], value)
 	a.array = append(a.array, rear...)
